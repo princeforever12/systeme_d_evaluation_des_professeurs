@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
+from sqlalchemy import text
 from wtforms import RadioField, SelectField, TextAreaField, SubmitField
 from wtforms.validators import DataRequired
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -13,6 +14,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
+FILIERES_ITER = ['I', 'IMT', 'EEA']
+
 # Modèles de base de données
 class Classe(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -24,6 +27,7 @@ class Matiere(db.Model):
 
 class SurveyResponse(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    filiere_name = db.Column(db.String(20), nullable=False, default='I')
     class_name = db.Column(db.String(50), nullable=False)
     subject_name = db.Column(db.String(50), nullable=False)
     involvement = db.Column(db.Integer, nullable=False)
@@ -102,6 +106,7 @@ def home():
 
 @app.route('/survey', methods=['GET', 'POST'])
 def survey():
+    filiere_name = session.get('filiere_name')
     class_name = session.get('class_name')
     subject_name = session.get('subject_name')
 
@@ -110,6 +115,7 @@ def survey():
     if request.method == 'POST':
         if form.validate():
             new_response = SurveyResponse(
+                filiere_name=filiere_name,
                 class_name=class_name,
                 subject_name=subject_name,
                 involvement=int(form.involvement.data),
@@ -145,7 +151,7 @@ def admin():
     print("Classes:", classes)
     print("Matières:", matieres)
 
-    return render_template('admin.html', classes=classes, matieres=matieres)
+    return render_template('admin.html', classes=classes, matieres=matieres, filieres=FILIERES_ITER)
 
 
 @app.route('/change_credentials', methods=['GET', 'POST'])
@@ -193,21 +199,23 @@ def logout():
 @app.route('/class_subject', methods=['GET', 'POST'])
 def select():
     if request.method == 'POST':
+        filiere_name = request.form.get('filiere')
         classe_id = request.form.get('classe')
         matiere_id = request.form.get('matiere')
 
-        if classe_id and matiere_id:
+        if filiere_name and classe_id and matiere_id:
             classe = Classe.query.get(classe_id)
             matiere = Matiere.query.get(matiere_id)
+            session['filiere_name'] = filiere_name
             session['class_name'] = classe.nom
             session['subject_name'] = matiere.nom
             return redirect(url_for('survey'))
         else:
-            flash('Veuillez sélectionner une classe et une matière.', 'danger')
+            flash('Veuillez sélectionner une filière, une classe et une matière.', 'danger')
 
     classes = Classe.query.all()
     matieres = Matiere.query.all()
-    return render_template('class_subject.html', classes=classes, matieres=matieres)
+    return render_template('class_subject.html', classes=classes, matieres=matieres, filieres=FILIERES_ITER)
 
 @app.route('/result')
 def result():
@@ -215,11 +223,16 @@ def result():
 
 @app.route('/report', methods=['GET', 'POST'])
 def generate_report():
+    filiere_name = request.form.get('filiere')
     classe_name = request.form.get('classe')
     matiere_name = request.form.get('matiere')
 
     # Récupérer les données de la base de données
-    responses = SurveyResponse.query.filter_by(class_name=classe_name, subject_name=matiere_name).all()
+    responses = SurveyResponse.query.filter_by(
+        filiere_name=filiere_name,
+        class_name=classe_name,
+        subject_name=matiere_name
+    ).all()
 
     if not responses:
         flash('Aucune donnée trouvée pour cette classe et matière.', 'warning')
@@ -243,6 +256,7 @@ def generate_report():
 
         return render_template('report.html', 
             classe_name=classe_name, 
+            filiere_name=filiere_name,
             matiere_name=matiere_name, 
             avg_involvement=avg_involvement,
             avg_initial_knowledge=avg_initial_knowledge,
@@ -279,10 +293,15 @@ def reset_survey_responses():
 @app.route('/show_table', methods=['GET'])
 def show_table():
     class_name = request.args.get('class_name', None)
+    filiere_name = request.args.get('filiere_name', None)
     
-    if class_name:
+    if class_name and filiere_name:
+        survey_responses = SurveyResponse.query.filter_by(class_name=class_name, filiere_name=filiere_name).all()
+    elif class_name:
         # Filtrer les réponses par classe
         survey_responses = SurveyResponse.query.filter_by(class_name=class_name).all()
+    elif filiere_name:
+        survey_responses = SurveyResponse.query.filter_by(filiere_name=filiere_name).all()
     else:
         # Afficher toutes les réponses si aucune classe n'est spécifiée
         survey_responses = SurveyResponse.query.all()
@@ -332,7 +351,18 @@ def delete_classe():
     return redirect(url_for('admin'))
 
 
+def run_schema_updates():
+    """Mise à jour légère du schéma SQLite pour les installations existantes."""
+    result = db.session.execute(text("PRAGMA table_info(survey_response)"))
+    columns = {row[1] for row in result}
+    if 'filiere_name' not in columns:
+        db.session.execute(text("ALTER TABLE survey_response ADD COLUMN filiere_name VARCHAR(20) DEFAULT 'I'"))
+        db.session.execute(text("UPDATE survey_response SET filiere_name = 'I' WHERE filiere_name IS NULL"))
+        db.session.commit()
+
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        run_schema_updates()
         app.run(host='0.0.0.0', port=5000)
