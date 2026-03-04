@@ -38,3 +38,9 @@ Un guide d’analyse et de migration vers le contexte **Département ITER (I/IMT
 ## 📌 Documentation projet tutoré (phase 2)
 - `CAHIER_DES_CHARGES_V1.md`
 - `PLAN_GESTION_PROJET_V1.md`
+
+
+## ✅ Adaptation déjà implémentée (phase 3)
+- Campagnes d'évaluation par filière (création + activation).
+- Génération de tokens anonymes à usage unique par filière/classe/matière.
+- Accès au questionnaire conditionné par token valide et campagne active.
