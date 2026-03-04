@@ -1,21 +1,24 @@
- SYSTEME WEB D’ÉVALUATION DES ENSEIGNEMENTS 
-Département ITER (Filières : I – IMT – EEA) 
-1-  Contexte 
-Le département ITER (Informatique, IMT, EEA) souhaite mettre en place un système numérique 
-permettant aux étudiants d’évaluer : 
-• Les enseignements 
-• Les enseignants 
-• L’organisation des cours 
-• Les infrastructures pédagogiques 
-Actuellement, les évaluations sont faites sur papier ou ne sont pas centralisées. 
-Problèmes : 
-• Manque d’anonymat garanti 
-• Difficulté d’analyse statistique 
-• Archivage non structuré 
-• Absence d’indicateurs décisionnels 
-2- Objectif général 
-Développer une application web sécurisée permettant : 
-• La collecte anonyme des évaluations 
-• L’analyse statistique automatique 
-• La génération de rapports par filière 
-• L’aide à la décision pédagogique
+# 🎓 DIT Teaching Evaluation System  
+
+## 📖 Aperçu  
+Solution interne développée pour le **Dakar Institute of Technology** afin de :  
+- **Remplacer Typeform** (limités en contrôle des données et analyses).  
+- **Automatiser** la collecte et l'analyse des évaluations enseignants/cours.  
+- **Garantir la confidentialité** (données hébergées en interne).  
+
+## 🛠 Fonctionnalités  
+### Pour les Étudiants  
+- Évaluation des cours via interface simplifiée (notes/commentaires).  
+- Sélection dynamique des classes/matières.  
+
+### Pour les Administrateurs  
+- Génération de rapports PDF/Excel (stats agrégées, tendances).  
+- Gestion des classes/matières et réinitialisation des sondages.  
+
+## ⚙️ Architecture  
+```mermaid  
+graph TD  
+    A[Flask Backend] --> B[(SQLite)]  
+    A --> C[Frontend HTML/Tailwind]  
+    D[Jenkins CI/CD] --> E[Docker Containers]  
+    E --> F[Kubernetes Cluster]  
