@@ -33,3 +33,8 @@ Un guide d’analyse et de migration vers le contexte **Département ITER (I/IMT
 - Rebranding UTT-LOKO / ITER dans l'interface.
 - Ajout de la sélection de filière côté étudiant et administration.
 - Filtrage des rapports par filière + classe + matière.
+
+
+## 📌 Documentation projet tutoré (phase 2)
+- `CAHIER_DES_CHARGES_V1.md`
+- `PLAN_GESTION_PROJET_V1.md`

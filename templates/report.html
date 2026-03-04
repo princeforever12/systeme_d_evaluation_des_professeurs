@@ -130,6 +130,14 @@
                         <td class="p-4 text-gray-700">{{ (course_organization_yes / responses_len) * 10 | round(2) }}</td>
                     </tr>
                     <tr class="border-b border-gray-200 hover:bg-gray-50">
+                        <td class="p-4 text-gray-700">Organisation pédagogique (emploi du temps, coordination, communication)</td>
+                        <td class="p-4 text-gray-700">{{ avg_schedule_organization | round(2) }}</td>
+                    </tr>
+                    <tr class="border-b border-gray-200 hover:bg-gray-50">
+                        <td class="p-4 text-gray-700">Qualité des infrastructures pédagogiques</td>
+                        <td class="p-4 text-gray-700">{{ avg_infrastructure_quality | round(2) }}</td>
+                    </tr>
+                    <tr class="border-b border-gray-200 hover:bg-gray-50">
                         <td class="p-4 text-gray-700">Satisfaction générale moyenne</td>
                         <td class="p-4 text-gray-700">{{ avg_satisfaction_general }}</td>
                     </tr>

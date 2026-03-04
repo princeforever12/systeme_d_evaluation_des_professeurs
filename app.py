@@ -39,6 +39,8 @@ class SurveyResponse(db.Model):
     explanations_clarity = db.Column(db.Integer, nullable=False)
     practical_skills = db.Column(db.String(3), nullable=False)
     course_organization = db.Column(db.String(3), nullable=False)
+    schedule_organization = db.Column(db.Integer, nullable=False, default=0)
+    infrastructure_quality = db.Column(db.Integer, nullable=False, default=0)
     overall_satisfaction = db.Column(db.Integer, nullable=False)
     feedback = db.Column(db.String(500), nullable=True)
 
@@ -88,6 +90,16 @@ class SurveyForm(FlaskForm):
         choices=[('oui', 'Oui'), ('non', 'Non')],
         validators=[DataRequired()]
     )
+    schedule_organization = RadioField(
+        'Comment évaluez-vous l\'organisation (emploi du temps, coordination, communication) ?',
+        choices=[(str(i), str(i)) for i in range(11)],
+        validators=[DataRequired()]
+    )
+    infrastructure_quality = RadioField(
+        'Comment évaluez-vous les infrastructures pédagogiques (salles, équipements, réseau, plateformes) ?',
+        choices=[(str(i), str(i)) for i in range(11)],
+        validators=[DataRequired()]
+    )
     overall_satisfaction = RadioField(
         'Quel est votre niveau de satisfaction générale ?', 
         choices=[(str(i), str(i)) for i in range(11)],
@@ -127,6 +139,8 @@ def survey():
                 explanations_clarity=int(form.explanations_clarity.data),
                 practical_skills=form.practical_skills.data,
                 course_organization=form.course_organization.data,
+                schedule_organization=int(form.schedule_organization.data),
+                infrastructure_quality=int(form.infrastructure_quality.data),
                 overall_satisfaction=int(form.overall_satisfaction.data),
                 feedback=form.feedback.data
             )
@@ -247,6 +261,8 @@ def generate_report():
     avg_examples_exercises = sum([resp.examples_exercises for resp in responses]) / len(responses)
     avg_explanations_clarity = sum([resp.explanations_clarity for resp in responses]) / len(responses)
     avg_satisfaction_general = sum([resp.overall_satisfaction for resp in responses]) / len(responses)
+    avg_schedule_organization = sum([resp.schedule_organization for resp in responses]) / len(responses)
+    avg_infrastructure_quality = sum([resp.infrastructure_quality for resp in responses]) / len(responses)
     practical_skills_yes = sum([1 for resp in responses if resp.practical_skills == 'oui'])
     course_organization_yes = sum([1 for resp in responses if resp.course_organization == 'oui'])
 
@@ -266,6 +282,8 @@ def generate_report():
             avg_examples_exercises=avg_examples_exercises,
             avg_explanations_clarity=avg_explanations_clarity,
             avg_satisfaction_general=avg_satisfaction_general,
+            avg_schedule_organization=avg_schedule_organization,
+            avg_infrastructure_quality=avg_infrastructure_quality,
             practical_skills_yes=practical_skills_yes,
             course_organization_yes=course_organization_yes,
             responses_len=len(responses),
@@ -358,6 +376,16 @@ def run_schema_updates():
     if 'filiere_name' not in columns:
         db.session.execute(text("ALTER TABLE survey_response ADD COLUMN filiere_name VARCHAR(20) DEFAULT 'I'"))
         db.session.execute(text("UPDATE survey_response SET filiere_name = 'I' WHERE filiere_name IS NULL"))
+        db.session.commit()
+
+    if 'schedule_organization' not in columns:
+        db.session.execute(text("ALTER TABLE survey_response ADD COLUMN schedule_organization INTEGER DEFAULT 0"))
+        db.session.execute(text("UPDATE survey_response SET schedule_organization = 0 WHERE schedule_organization IS NULL"))
+        db.session.commit()
+
+    if 'infrastructure_quality' not in columns:
+        db.session.execute(text("ALTER TABLE survey_response ADD COLUMN infrastructure_quality INTEGER DEFAULT 0"))
+        db.session.execute(text("UPDATE survey_response SET infrastructure_quality = 0 WHERE infrastructure_quality IS NULL"))
         db.session.commit()
 
 
