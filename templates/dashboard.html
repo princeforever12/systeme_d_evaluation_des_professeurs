@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Décisionnel ITER</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+    <div class="container mx-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Dashboard décisionnel ITER</h1>
+            <a href="{{ url_for('admin') }}" class="bg-gray-700 text-white px-4 py-2 rounded">Retour admin</a>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow mb-6">
+            <form method="GET" action="{{ url_for('dashboard') }}" class="grid md:grid-cols-4 gap-4">
+                <select name="filiere" class="p-2 border rounded">
+                    <option value="">Toutes les filières</option>
+                    {% for filiere in filieres %}
+                        <option value="{{ filiere }}" {% if selected.filiere == filiere %}selected{% endif %}>{{ filiere }}</option>
+                    {% endfor %}
+                </select>
+                <select name="classe" class="p-2 border rounded">
+                    <option value="">Toutes les classes</option>
+                    {% for classe in classes %}
+                        <option value="{{ classe.nom }}" {% if selected.classe == classe.nom %}selected{% endif %}>{{ classe.nom }}</option>
+                    {% endfor %}
+                </select>
+                <select name="matiere" class="p-2 border rounded">
+                    <option value="">Toutes les matières</option>
+                    {% for matiere in matieres %}
+                        <option value="{{ matiere.nom }}" {% if selected.matiere == matiere.nom %}selected{% endif %}>{{ matiere.nom }}</option>
+                    {% endfor %}
+                </select>
+                <button class="bg-blue-600 text-white rounded px-4 py-2">Appliquer</button>
+            </form>
+
+            <div class="mt-4">
+                <a class="text-blue-700 underline" href="{{ url_for('dashboard_export_csv', filiere=selected.filiere, classe=selected.classe, matiere=selected.matiere) }}">Télécharger l'export CSV</a>
+            </div>
+        </div>
+
+        <div class="grid md:grid-cols-5 gap-4">
+            <div class="bg-white p-4 rounded shadow"><p class="text-sm text-gray-500">Participations</p><p class="text-2xl font-bold">{{ metrics.participation }}</p></div>
+            <div class="bg-white p-4 rounded shadow"><p class="text-sm text-gray-500">Satisfaction globale /10</p><p class="text-2xl font-bold">{{ metrics.satisfaction }}</p></div>
+            <div class="bg-white p-4 rounded shadow"><p class="text-sm text-gray-500">Organisation /10</p><p class="text-2xl font-bold">{{ metrics.organization }}</p></div>
+            <div class="bg-white p-4 rounded shadow"><p class="text-sm text-gray-500">Infrastructures /10</p><p class="text-2xl font-bold">{{ metrics.infrastructure }}</p></div>
+            <div class="bg-white p-4 rounded shadow"><p class="text-sm text-gray-500">Pédagogie /10</p><p class="text-2xl font-bold">{{ metrics.pedagogy }}</p></div>
+        </div>
+    </div>
+</body>
+</html>
