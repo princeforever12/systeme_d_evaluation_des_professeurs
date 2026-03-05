@@ -50,3 +50,10 @@ Un guide d’analyse et de migration vers le contexte **Département ITER (I/IMT
 - Dashboard décisionnel avec filtres (filière / classe / matière).
 - KPI pédagogiques, organisationnels et infrastructures.
 - Export CSV des données filtrées.
+
+
+## ✅ Adaptation déjà implémentée (phase 5)
+- Configuration de sécurité via variables d'environnement (`FLASK_SECRET_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`).
+- Journal d'audit des actions sensibles (connexion admin, campagnes, tokens, gestion classes/matières, reset).
+- Endpoint de supervision `/health`.
+- Tests automatisés initiaux (santé + audit login).

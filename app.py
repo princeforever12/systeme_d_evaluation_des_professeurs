@@ -3,8 +3,9 @@ import secrets
 import string
 import csv
 import io
+import os
 
-from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
+from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
 from sqlalchemy import text
@@ -13,7 +14,7 @@ from wtforms.validators import DataRequired
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'  # Remplacez par une clé secrète appropriée
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-me')
 
 # Configuration de la base de données
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
@@ -52,6 +53,14 @@ class EvaluationToken(db.Model):
     used_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     campaign_id = db.Column(db.Integer, db.ForeignKey('evaluation_campaign.id'), nullable=True)
+
+
+class AuditLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    actor = db.Column(db.String(120), nullable=False)
+    action = db.Column(db.String(120), nullable=False)
+    details = db.Column(db.String(500), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 
 class SurveyResponse(db.Model):
@@ -140,8 +149,41 @@ class SurveyForm(FlaskForm):
 
 
 # Stockage sécurisé des mots de passe
-ADMIN_USERNAME = 'admin'
-ADMIN_PASSWORD_HASH = generate_password_hash('adminpassword')
+ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD_HASH = generate_password_hash(os.getenv('ADMIN_PASSWORD', 'adminpassword'))
+
+
+def ensure_admin_session():
+    if not session.get('admin'):
+        flash('Veuillez vous connecter pour accéder à cette page.', 'danger')
+        return False
+    return True
+
+
+def log_audit(action, details=''):
+    actor = session.get('username', 'anonymous')
+    db.session.add(AuditLog(actor=actor, action=action, details=details[:500]))
+    db.session.commit()
+
+
+def generate_unique_token():
+    alphabet = string.ascii_uppercase + string.digits
+    while True:
+        token = ''.join(secrets.choice(alphabet) for _ in range(10))
+        if not EvaluationToken.query.filter_by(token=token).first():
+            return token
+
+
+def build_dashboard_query(filiere_name=None, classe_name=None, subject_name=None):
+    query = SurveyResponse.query
+    if filiere_name:
+        query = query.filter_by(filiere_name=filiere_name)
+    if classe_name:
+        query = query.filter_by(class_name=classe_name)
+    if subject_name:
+        query = query.filter_by(subject_name=subject_name)
+    return query
+
 
 
 def ensure_admin_session():
@@ -173,6 +215,11 @@ def build_dashboard_query(filiere_name=None, classe_name=None, subject_name=None
 @app.route('/')
 def home():
     return render_template('home.html')
+
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'ok', 'service': 'iter-eval-app'})
 
 
 @app.route('/survey', methods=['GET', 'POST'])
@@ -216,6 +263,7 @@ def survey():
             token_obj.used_at = datetime.utcnow()
             db.session.add(new_response)
             db.session.commit()
+            log_audit('survey_submitted', f'filiere={filiere_name}, classe={class_name}, matiere={subject_name}')
             session.pop('token_id', None)
             return redirect(url_for('result'))
 
@@ -258,6 +306,7 @@ def create_campaign():
     campaign = EvaluationCampaign(name=name, filiere_name=filiere, is_active=False)
     db.session.add(campaign)
     db.session.commit()
+    log_audit('campaign_created', f'name={name}, filiere={filiere}')
     flash('Campagne créée avec succès.', 'success')
     return redirect(url_for('admin'))
 
@@ -271,6 +320,7 @@ def activate_campaign(campaign_id):
     EvaluationCampaign.query.filter_by(filiere_name=campaign.filiere_name, is_active=True).update({'is_active': False})
     campaign.is_active = True
     db.session.commit()
+    log_audit('campaign_activated', f'name={campaign.name}, filiere={campaign.filiere_name}')
     flash(f'Campagne "{campaign.name}" activée pour la filière {campaign.filiere_name}.', 'success')
     return redirect(url_for('admin'))
 
@@ -312,6 +362,7 @@ def generate_tokens():
         created += 1
 
     db.session.commit()
+    log_audit('tokens_generated', f'count={created}, filiere={filiere}, classe={classe_name}, matiere={subject_name}')
     flash(f'{created} tokens générés pour {filiere} / {classe_name} / {subject_name}.', 'success')
     return redirect(url_for('admin'))
 
@@ -331,6 +382,7 @@ def change_credentials():
         if old_username == ADMIN_USERNAME and check_password_hash(ADMIN_PASSWORD_HASH, old_password):
             ADMIN_USERNAME = new_username
             ADMIN_PASSWORD_HASH = generate_password_hash(new_password)
+            log_audit('admin_credentials_changed', f'new_username={new_username}')
             flash('Nom d\'utilisateur et mot de passe mis à jour avec succès.', 'success')
             return redirect(url_for('admin'))
         flash('L\'ancien nom d\'utilisateur ou mot de passe est incorrect.', 'danger')
@@ -345,6 +397,8 @@ def login():
         password = request.form['password']
         if username == ADMIN_USERNAME and check_password_hash(ADMIN_PASSWORD_HASH, password):
             session['admin'] = True
+            session['username'] = username
+            log_audit('admin_login', f'user={username}')
             flash('Vous êtes connecté.', 'success')
             return redirect(url_for('admin'))
         flash('Nom d\'utilisateur ou mot de passe incorrect.', 'danger')
@@ -353,7 +407,10 @@ def login():
 
 @app.route('/logout')
 def logout():
+    if session.get('admin'):
+        log_audit('admin_logout', f'user={session.get("username", "admin")}')
     session.pop('admin', None)
+    session.pop('username', None)
     flash('Vous avez été déconnecté.', 'success')
     return redirect(url_for('login'))
 
@@ -394,6 +451,7 @@ def select():
             session['class_name'] = classe.nom
             session['subject_name'] = matiere.nom
             session['token_id'] = token_obj.id
+            log_audit('token_validated', f'token={access_token}, filiere={filiere_name}, classe={classe.nom}, matiere={matiere.nom}')
             return redirect(url_for('survey'))
 
         flash('Veuillez sélectionner une filière, une classe, une matière et saisir un token.', 'danger')
@@ -560,6 +618,7 @@ def reset_survey_responses():
     try:
         db.session.query(SurveyResponse).delete()
         db.session.commit()
+        log_audit('responses_reset', 'all survey responses deleted by admin')
         flash('Tous les résultats ont été réinitialisés avec succès.', 'success')
     except Exception as e:
         db.session.rollback()
@@ -594,6 +653,7 @@ def add_matiere():
     if matiere_name:
         db.session.add(Matiere(nom=matiere_name))
         db.session.commit()
+        log_audit('matiere_added', f'nom={matiere_name}')
         flash('Matière ajoutée avec succès.', 'success')
     return redirect(url_for('admin'))
 
@@ -609,6 +669,7 @@ def delete_matiere():
         if matiere_to_delete:
             db.session.delete(matiere_to_delete)
             db.session.commit()
+            log_audit('matiere_deleted', f'nom={matiere_to_delete.nom}')
             flash('Matière supprimée avec succès.', 'success')
     return redirect(url_for('admin'))
 
@@ -622,6 +683,7 @@ def add_classe():
     if classe_name:
         db.session.add(Classe(nom=classe_name))
         db.session.commit()
+        log_audit('classe_added', f'nom={classe_name}')
         flash('Classe ajoutée avec succès.', 'success')
     return redirect(url_for('admin'))
 
@@ -637,6 +699,7 @@ def delete_classe():
         if classe_to_delete:
             db.session.delete(classe_to_delete)
             db.session.commit()
+            log_audit('classe_deleted', f'nom={classe_to_delete.nom}')
             flash('Classe supprimée avec succès.', 'success')
     return redirect(url_for('admin'))
 
