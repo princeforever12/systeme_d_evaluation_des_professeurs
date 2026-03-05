@@ -44,3 +44,9 @@ Un guide d’analyse et de migration vers le contexte **Département ITER (I/IMT
 - Campagnes d'évaluation par filière (création + activation).
 - Génération de tokens anonymes à usage unique par filière/classe/matière.
 - Accès au questionnaire conditionné par token valide et campagne active.
+
+
+## ✅ Adaptation déjà implémentée (phase 4)
+- Dashboard décisionnel avec filtres (filière / classe / matière).
+- KPI pédagogiques, organisationnels et infrastructures.
+- Export CSV des données filtrées.

@@ -114,6 +114,13 @@
             </div>
         </div>
 
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-2xl font-bold mb-4 text-teal-600">Dashboard décisionnel</h2>
+            <p class="text-gray-600 mb-4">Consultez les indicateurs clés et exportez les données filtrées.</p>
+            <a href="{{ url_for('dashboard') }}" class="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700">Ouvrir le dashboard</a>
+        </div>
+
         <div class="bg-white rounded-xl shadow p-6">
             <h2 class="text-2xl font-bold mb-4 text-blue-600">Générer un Rapport</h2>
             <form action="{{ url_for('generate_report') }}" method="post" class="space-y-4">

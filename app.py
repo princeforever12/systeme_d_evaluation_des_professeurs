@@ -1,8 +1,10 @@
 from datetime import datetime
 import secrets
 import string
+import csv
+import io
 
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
 from sqlalchemy import text
@@ -155,6 +157,17 @@ def generate_unique_token():
         token = ''.join(secrets.choice(alphabet) for _ in range(10))
         if not EvaluationToken.query.filter_by(token=token).first():
             return token
+
+
+def build_dashboard_query(filiere_name=None, classe_name=None, subject_name=None):
+    query = SurveyResponse.query
+    if filiere_name:
+        query = query.filter_by(filiere_name=filiere_name)
+    if classe_name:
+        query = query.filter_by(class_name=classe_name)
+    if subject_name:
+        query = query.filter_by(subject_name=subject_name)
+    return query
 
 
 @app.route('/')
@@ -442,6 +455,100 @@ def generate_report():
         practical_skills_yes=practical_skills_yes,
         course_organization_yes=course_organization_yes,
         responses_len=len(responses),
+    )
+
+
+@app.route('/dashboard', methods=['GET'])
+def dashboard():
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    filiere_name = request.args.get('filiere', '').strip()
+    classe_name = request.args.get('classe', '').strip()
+    subject_name = request.args.get('matiere', '').strip()
+
+    query = build_dashboard_query(
+        filiere_name=filiere_name or None,
+        classe_name=classe_name or None,
+        subject_name=subject_name or None,
+    )
+    responses = query.all()
+
+    total = len(responses)
+    if total == 0:
+        metrics = {
+            'participation': 0,
+            'satisfaction': 0,
+            'organization': 0,
+            'infrastructure': 0,
+            'pedagogy': 0,
+        }
+    else:
+        metrics = {
+            'participation': total,
+            'satisfaction': round(sum(r.overall_satisfaction for r in responses) / total, 2),
+            'organization': round(sum(r.schedule_organization for r in responses) / total, 2),
+            'infrastructure': round(sum(r.infrastructure_quality for r in responses) / total, 2),
+            'pedagogy': round((
+                sum(r.professor_motivation for r in responses)
+                + sum(r.tools_methodology for r in responses)
+                + sum(r.explanations_clarity for r in responses)
+            ) / (3 * total), 2),
+        }
+
+    classes = Classe.query.all()
+    matieres = Matiere.query.all()
+    return render_template(
+        'dashboard.html',
+        metrics=metrics,
+        filieres=FILIERES_ITER,
+        classes=classes,
+        matieres=matieres,
+        selected={
+            'filiere': filiere_name,
+            'classe': classe_name,
+            'matiere': subject_name,
+        },
+    )
+
+
+@app.route('/dashboard/export.csv', methods=['GET'])
+def dashboard_export_csv():
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    filiere_name = request.args.get('filiere', '').strip() or None
+    classe_name = request.args.get('classe', '').strip() or None
+    subject_name = request.args.get('matiere', '').strip() or None
+
+    responses = build_dashboard_query(filiere_name, classe_name, subject_name).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'filiere', 'classe', 'matiere', 'satisfaction_generale', 'organisation',
+        'infrastructures', 'motivation_prof', 'methodologie', 'clarte', 'feedback'
+    ])
+    for r in responses:
+        writer.writerow([
+            r.filiere_name,
+            r.class_name,
+            r.subject_name,
+            r.overall_satisfaction,
+            r.schedule_organization,
+            r.infrastructure_quality,
+            r.professor_motivation,
+            r.tools_methodology,
+            r.explanations_clarity,
+            r.feedback or '',
+        ])
+
+    csv_data = output.getvalue()
+    filename = f"dashboard_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        csv_data,
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={filename}'},
     )
 
 
