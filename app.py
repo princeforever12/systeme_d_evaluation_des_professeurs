@@ -185,6 +185,33 @@ def build_dashboard_query(filiere_name=None, classe_name=None, subject_name=None
     return query
 
 
+
+def ensure_admin_session():
+    if not session.get('admin'):
+        flash('Veuillez vous connecter pour accéder à cette page.', 'danger')
+        return False
+    return True
+
+
+def generate_unique_token():
+    alphabet = string.ascii_uppercase + string.digits
+    while True:
+        token = ''.join(secrets.choice(alphabet) for _ in range(10))
+        if not EvaluationToken.query.filter_by(token=token).first():
+            return token
+
+
+def build_dashboard_query(filiere_name=None, classe_name=None, subject_name=None):
+    query = SurveyResponse.query
+    if filiere_name:
+        query = query.filter_by(filiere_name=filiere_name)
+    if classe_name:
+        query = query.filter_by(class_name=classe_name)
+    if subject_name:
+        query = query.filter_by(subject_name=subject_name)
+    return query
+
+
 @app.route('/')
 def home():
     return render_template('home.html')
