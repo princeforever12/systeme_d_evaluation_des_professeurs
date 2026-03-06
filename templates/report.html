@@ -30,18 +30,18 @@
 <body class="bg-gray-50 min-h-screen p-6">
     <div class="container mx-auto">
         <!-- Bouton de retour -->
-        <a href="{{ url_for('admin') }}" class="back-button bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 inline-block mb-8">
+        <a href="{{ url_for('admin') }}" class="back-button bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-700 inline-block mb-8">
             Retour
         </a>
 
         <!-- Titre principal -->
-        <h1 class="text-3xl font-bold text-center mb-8 text-gray-800">Rapport d’évaluation {{ matiere_name }} - {{ classe_name }}</h1>
+        <h1 class="text-3xl font-bold text-center mb-8 text-gray-800">Rapport d’évaluation - Filière {{ filiere_name }} | {{ matiere_name }} - {{ classe_name }}</h1>
 
         <!-- Section 1 : Implication et Niveau de compétences des étudiants -->
         <div class="table-container p-6 mb-8">
-            <h3 class="text-xl font-semibold mb-4 text-blue-600">1. Implication et Niveau de compétences des étudiants</h3>
+            <h3 class="text-xl font-semibold mb-4 text-red-700">1. Implication et Niveau de compétences des étudiants</h3>
             <table class="w-full">
-                <thead class="bg-blue-50">
+                <thead class="bg-red-50">
                     <tr>
                         <th class="p-4 text-left text-gray-700 font-bold">Critère</th>
                         <th class="p-4 text-left text-gray-700 font-bold">Note Moyenne / 10</th>
@@ -66,9 +66,9 @@
 
         <!-- Section 2 : Compétences du formateur -->
         <div class="table-container p-6 mb-8">
-            <h3 class="text-xl font-semibold mb-4 text-green-600">2. Compétences du formateur</h3>
+            <h3 class="text-xl font-semibold mb-4 text-slate-700">2. Compétences du formateur</h3>
             <table class="w-full">
-                <thead class="bg-green-50">
+                <thead class="bg-slate-100">
                     <tr>
                         <th class="p-4 text-left text-gray-700 font-bold">Critère</th>
                         <th class="p-4 text-left text-gray-700 font-bold">Note Moyenne / 10</th>
@@ -97,9 +97,9 @@
 
         <!-- Section 3 : Mesure de la capacité de mise en pratique des compétences acquises -->
         <div class="table-container p-6 mb-8">
-            <h3 class="text-xl font-semibold mb-4 text-purple-600">3. Mesure de la capacité de mise en pratique des compétences acquises</h3>
+            <h3 class="text-xl font-semibold mb-4 text-red-700">3. Mesure de la capacité de mise en pratique des compétences acquises</h3>
             <table class="w-full">
-                <thead class="bg-purple-50">
+                <thead class="bg-rose-50">
                     <tr>
                         <th class="p-4 text-left text-gray-700 font-bold">Critère</th>
                         <th class="p-4 text-left text-gray-700 font-bold">Pourcentage</th>
@@ -128,6 +128,14 @@
                     <tr class="border-b border-gray-200 hover:bg-gray-50">
                         <td class="p-4 text-gray-700">Satisfaction avec l'organisation du cours</td>
                         <td class="p-4 text-gray-700">{{ (course_organization_yes / responses_len) * 10 | round(2) }}</td>
+                    </tr>
+                    <tr class="border-b border-gray-200 hover:bg-gray-50">
+                        <td class="p-4 text-gray-700">Organisation pédagogique (emploi du temps, coordination, communication)</td>
+                        <td class="p-4 text-gray-700">{{ avg_schedule_organization | round(2) }}</td>
+                    </tr>
+                    <tr class="border-b border-gray-200 hover:bg-gray-50">
+                        <td class="p-4 text-gray-700">Qualité des infrastructures pédagogiques</td>
+                        <td class="p-4 text-gray-700">{{ avg_infrastructure_quality | round(2) }}</td>
                     </tr>
                     <tr class="border-b border-gray-200 hover:bg-gray-50">
                         <td class="p-4 text-gray-700">Satisfaction générale moyenne</td>
