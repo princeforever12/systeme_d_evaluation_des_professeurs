@@ -151,11 +151,20 @@ class SurveyForm(FlaskForm):
 # Stockage sécurisé des mots de passe
 ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD_HASH = generate_password_hash(os.getenv('ADMIN_PASSWORD', 'adminpassword'))
+TEACHER_USERNAME = os.getenv('TEACHER_USERNAME', 'enseignant')
+TEACHER_PASSWORD_HASH = generate_password_hash(os.getenv('TEACHER_PASSWORD', 'enseignantpassword'))
 
 
 def ensure_admin_session():
     if not session.get('admin'):
         flash('Veuillez vous connecter pour accéder à cette page.', 'danger')
+        return False
+    return True
+
+
+def ensure_teacher_session():
+    if not session.get('teacher'):
+        flash('Veuillez vous connecter à l\'espace enseignant.', 'danger')
         return False
     return True
 
@@ -376,6 +385,73 @@ def login():
             return redirect(url_for('admin'))
         flash('Nom d\'utilisateur ou mot de passe incorrect.', 'danger')
     return render_template('login.html')
+
+
+@app.route('/teacher/login', methods=['GET', 'POST'])
+def teacher_login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        if username == TEACHER_USERNAME and check_password_hash(TEACHER_PASSWORD_HASH, password):
+            session['teacher'] = True
+            session['teacher_username'] = username
+            log_audit('teacher_login', f'user={username}')
+            flash('Connexion enseignant réussie.', 'success')
+            return redirect(url_for('teacher_dashboard'))
+        flash('Identifiants enseignant incorrects.', 'danger')
+    return render_template('teacher_login.html')
+
+
+@app.route('/teacher/logout')
+def teacher_logout():
+    if session.get('teacher'):
+        log_audit('teacher_logout', f'user={session.get("teacher_username", "enseignant")}')
+    session.pop('teacher', None)
+    session.pop('teacher_username', None)
+    flash('Vous êtes déconnecté de l\'espace enseignant.', 'success')
+    return redirect(url_for('teacher_login'))
+
+
+@app.route('/teacher/dashboard', methods=['GET'])
+def teacher_dashboard():
+    if not ensure_teacher_session():
+        return redirect(url_for('teacher_login'))
+
+    filiere_name = request.args.get('filiere', '').strip() or None
+    classe_name = request.args.get('classe', '').strip() or None
+    subject_name = request.args.get('matiere', '').strip() or None
+
+    responses = build_dashboard_query(filiere_name, classe_name, subject_name).all()
+    total = len(responses)
+    comments = [r.feedback for r in responses if r.feedback]
+
+    metrics = {
+        'total': total,
+        'satisfaction': round(sum(r.overall_satisfaction for r in responses) / total, 2) if total else 0,
+        'pedagogy': round((
+            sum(r.professor_motivation for r in responses)
+            + sum(r.tools_methodology for r in responses)
+            + sum(r.explanations_clarity for r in responses)
+        ) / (3 * total), 2) if total else 0,
+        'organization': round(sum(r.schedule_organization for r in responses) / total, 2) if total else 0,
+        'infrastructure': round(sum(r.infrastructure_quality for r in responses) / total, 2) if total else 0,
+    }
+
+    classes = Classe.query.all()
+    matieres = Matiere.query.all()
+    return render_template(
+        'teacher_dashboard.html',
+        metrics=metrics,
+        comments=comments[:30],
+        filieres=FILIERES_ITER,
+        classes=classes,
+        matieres=matieres,
+        selected={
+            'filiere': filiere_name or '',
+            'classe': classe_name or '',
+            'matiere': subject_name or '',
+        },
+    )
 
 
 @app.route('/logout')

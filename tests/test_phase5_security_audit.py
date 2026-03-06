@@ -34,6 +34,16 @@ class Phase5SecurityAuditTest(unittest.TestCase):
             self.assertIsNotNone(latest)
             self.assertEqual(latest.action, 'admin_login')
 
+    def test_teacher_login_and_dashboard(self):
+        res = self.client.post('/teacher/login', data={'username': 'enseignant', 'password': 'enseignantpassword'}, follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b'Dashboard Enseignant', res.data)
+
+        with app.app_context():
+            latest = AuditLog.query.order_by(AuditLog.id.desc()).first()
+            self.assertIsNotNone(latest)
+            self.assertEqual(latest.action, 'teacher_login')
+
 
 if __name__ == '__main__':
     unittest.main()
