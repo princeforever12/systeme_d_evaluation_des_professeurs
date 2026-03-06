@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion Enseignant</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-lg shadow-lg text-center w-full max-w-md">
+        <h2 class="text-3xl font-bold mb-4 text-purple-700">Espace Enseignant</h2>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="mb-4 space-y-2 text-left">
+                    {% for category, message in messages %}
+                        <p class="p-2 rounded {{ 'bg-red-100 text-red-700' if category == 'danger' else 'bg-green-100 text-green-700' }}">{{ message }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('teacher_login') }}">
+            <div class="mb-4 text-left">
+                <label class="block text-gray-700 mb-2">Nom d'utilisateur</label>
+                <input type="text" name="username" class="w-full p-2 border rounded" required>
+            </div>
+
+            <div class="mb-6 text-left">
+                <label class="block text-gray-700 mb-2">Mot de passe</label>
+                <input type="password" name="password" class="w-full p-2 border rounded" required>
+            </div>
+            <button type="submit" class="w-full bg-purple-600 text-white p-2 rounded hover:bg-purple-700">
+                Se connecter
+            </button>
+        </form>
+
+        <a href="{{ url_for('home') }}" class="inline-block mt-4 text-blue-600 hover:underline">Retour accueil</a>
+    </div>
+</body>
+</html>

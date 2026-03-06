@@ -211,6 +211,30 @@ h1 {
             </div>
 
             <div class="form-group">
+                {{ form.schedule_organization.label }}
+                <ul class="choice-list">
+                    {% for choice in form.schedule_organization %}
+                        <li>
+                            <input type="radio" id="{{ choice.id }}" name="{{ form.schedule_organization.name }}" value="{{ choice.data }}" style="display:none;">
+                            <button type="button" class="choice-button" onclick="selectChoice('{{ form.schedule_organization.name }}', '{{ choice.id }}')">{{ choice.label }}</button>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="form-group">
+                {{ form.infrastructure_quality.label }}
+                <ul class="choice-list">
+                    {% for choice in form.infrastructure_quality %}
+                        <li>
+                            <input type="radio" id="{{ choice.id }}" name="{{ form.infrastructure_quality.name }}" value="{{ choice.data }}" style="display:none;">
+                            <button type="button" class="choice-button" onclick="selectChoice('{{ form.infrastructure_quality.name }}', '{{ choice.id }}')">{{ choice.label }}</button>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="form-group">
                 {{ form.overall_satisfaction.label }}
                 <ul class="choice-list">
                     {% for choice in form.overall_satisfaction %}
