@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
 </head>
 <body class="bg-gray-50 min-h-screen p-6">
-    <nav class="bg-gradient-to-r from-blue-600 to-purple-600 p-4 text-white mb-8 shadow-lg rounded">
+    <nav class="bg-gradient-to-r from-red-700 to-red-900 p-4 text-white mb-8 shadow-lg rounded">
         <div class="container mx-auto flex justify-between items-center">
             <h3 class="text-2xl font-bold">Administration ITER - UTT-LOKO</h3>
             <div class="flex space-x-4">
@@ -31,7 +31,7 @@
         {% endwith %}
 
         <div class="bg-white rounded-xl shadow p-6">
-            <h2 class="text-2xl font-bold mb-4 text-indigo-600">Phase 3 - Campagnes & tokens anonymes</h2>
+            <h2 class="text-2xl font-bold mb-4 text-red-700">Phase 3 - Campagnes & tokens anonymes</h2>
 
             <div class="grid md:grid-cols-2 gap-6">
                 <div class="border rounded-lg p-4">
@@ -42,7 +42,7 @@
                             <option value="">Filière</option>
                             {% for filiere in filieres %}<option value="{{ filiere }}">{{ filiere }}</option>{% endfor %}
                         </select>
-                        <button class="bg-indigo-600 text-white px-4 py-2 rounded">Créer</button>
+                        <button class="bg-red-700 text-white px-4 py-2 rounded">Créer</button>
                     </form>
                 </div>
 
@@ -68,7 +68,7 @@
                             {% for matiere in matieres %}<option value="{{ matiere.nom }}">{{ matiere.nom }}</option>{% endfor %}
                         </select>
                         <input type="number" name="count" min="1" max="200" value="10" required class="w-full p-2 border rounded">
-                        <button class="bg-purple-600 text-white px-4 py-2 rounded">Générer</button>
+                        <button class="bg-red-700 text-white px-4 py-2 rounded">Générer</button>
                     </form>
                 </div>
             </div>
@@ -87,7 +87,7 @@
                                     <span class="text-green-700 bg-green-100 px-2 py-1 rounded text-sm">Active</span>
                                 {% else %}
                                     <form method="POST" action="{{ url_for('activate_campaign', campaign_id=campaign.id) }}">
-                                        <button class="bg-blue-500 text-white px-3 py-1 rounded text-sm">Activer</button>
+                                        <button class="bg-red-500 text-white px-3 py-1 rounded text-sm">Activer</button>
                                     </form>
                                 {% endif %}
                             </div>
@@ -104,7 +104,7 @@
                             <div class="border p-3 rounded">
                                 <p class="font-mono text-sm">{{ token.token }}</p>
                                 <p class="text-xs text-gray-600">{{ token.filiere_name }} • {{ token.class_name }} • {{ token.subject_name }}</p>
-                                <p class="text-xs {{ 'text-red-600' if token.is_used else 'text-green-600' }}">{{ 'Utilisé' if token.is_used else 'Disponible' }}</p>
+                                <p class="text-xs {{ 'text-red-600' if token.is_used else 'text-slate-700' }}">{{ 'Utilisé' if token.is_used else 'Disponible' }}</p>
                             </div>
                         {% else %}
                             <p class="text-gray-500">Aucun token généré.</p>
@@ -116,13 +116,13 @@
 
 
         <div class="bg-white rounded-xl shadow p-6">
-            <h2 class="text-2xl font-bold mb-4 text-teal-600">Dashboard décisionnel</h2>
+            <h2 class="text-2xl font-bold mb-4 text-red-700">Dashboard décisionnel</h2>
             <p class="text-gray-600 mb-4">Consultez les indicateurs clés et exportez les données filtrées.</p>
-            <a href="{{ url_for('dashboard') }}" class="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700">Ouvrir le dashboard</a>
+            <a href="{{ url_for('dashboard') }}" class="bg-red-700 text-white px-6 py-2 rounded-lg hover:bg-red-800">Ouvrir le dashboard</a>
         </div>
 
         <div class="bg-white rounded-xl shadow p-6">
-            <h2 class="text-2xl font-bold mb-4 text-blue-600">Générer un Rapport</h2>
+            <h2 class="text-2xl font-bold mb-4 text-red-700">Générer un Rapport</h2>
             <form action="{{ url_for('generate_report') }}" method="post" class="space-y-4">
                 <select name="filiere" required class="w-full p-2 border rounded">
                     <option value="">Filière</option>
@@ -134,12 +134,12 @@
                 <select name="matiere" required class="w-full p-2 border rounded">
                     {% for matiere in matieres %}<option value="{{ matiere.nom }}">{{ matiere.nom }}</option>{% endfor %}
                 </select>
-                <button type="submit" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">Générer le Rapport</button>
+                <button type="submit" class="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-700">Générer le Rapport</button>
             </form>
         </div>
 
         <div class="bg-white rounded-xl shadow p-6">
-            <h2 class="text-2xl font-bold mb-4 text-green-600">Gestion des Matières et Classes</h2>
+            <h2 class="text-2xl font-bold mb-4 text-slate-700">Gestion des Matières et Classes</h2>
             <div class="grid md:grid-cols-2 gap-6">
                 <form method="POST" action="{{ url_for('add_matiere') }}" class="space-y-2">
                     <label class="font-semibold">Ajouter une matière</label>

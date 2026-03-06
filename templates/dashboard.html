@@ -33,11 +33,11 @@
                         <option value="{{ matiere.nom }}" {% if selected.matiere == matiere.nom %}selected{% endif %}>{{ matiere.nom }}</option>
                     {% endfor %}
                 </select>
-                <button class="bg-blue-600 text-white rounded px-4 py-2">Appliquer</button>
+                <button class="bg-red-700 text-white rounded px-4 py-2">Appliquer</button>
             </form>
 
             <div class="mt-4">
-                <a class="text-blue-700 underline" href="{{ url_for('dashboard_export_csv', filiere=selected.filiere, classe=selected.classe, matiere=selected.matiere) }}">Télécharger l'export CSV</a>
+                <a class="text-red-700 underline" href="{{ url_for('dashboard_export_csv', filiere=selected.filiere, classe=selected.classe, matiere=selected.matiere) }}">Télécharger l'export CSV</a>
             </div>
         </div>
 

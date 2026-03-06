@@ -9,7 +9,7 @@
 <body class="bg-gray-100 min-h-screen p-6">
     <div class="container mx-auto">
         <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-purple-700">Dashboard Enseignant</h1>
+            <h1 class="text-3xl font-bold text-red-700">Dashboard Enseignant</h1>
             <a href="{{ url_for('teacher_logout') }}" class="bg-red-600 text-white px-4 py-2 rounded">Déconnexion</a>
         </div>
 
@@ -33,7 +33,7 @@
                         <option value="{{ matiere.nom }}" {% if selected.matiere == matiere.nom %}selected{% endif %}>{{ matiere.nom }}</option>
                     {% endfor %}
                 </select>
-                <button class="bg-purple-600 text-white rounded px-4 py-2">Filtrer</button>
+                <button class="bg-red-700 text-white rounded px-4 py-2">Filtrer</button>
             </form>
         </div>
 
