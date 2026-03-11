@@ -22,12 +22,15 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 FILIERES_ITER = ['I', 'IMT', 'EEA']
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
 L1_LABEL = 'L1 (sans filière)'
 ALL_FILIERES = [L1_LABEL] + FILIERES_ITER
 
 
 def is_l1_class(class_name):
     return class_name.strip().upper().startswith('L1')
+=======
+>>>>>>> main
 
 
 # Modèles de base de données
@@ -86,6 +89,7 @@ class Questionnaire(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
 class ClassQuestion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     class_name = db.Column(db.String(100), nullable=False)
@@ -94,6 +98,8 @@ class ClassQuestion(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 
+=======
+>>>>>>> main
 class SurveyResponse(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filiere_name = db.Column(db.String(20), nullable=False, default='I')
@@ -114,6 +120,7 @@ class SurveyResponse(db.Model):
     feedback = db.Column(db.String(500), nullable=True)
 
 
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
 class ClassQuestionAnswer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     survey_response_id = db.Column(db.Integer, db.ForeignKey('survey_response.id'), nullable=False)
@@ -123,6 +130,8 @@ class ClassQuestionAnswer(db.Model):
     answer_value = db.Column(db.String(500), nullable=False)
 
 
+=======
+>>>>>>> main
 class SurveyForm(FlaskForm):
     involvement = RadioField(
         'Quel est votre niveau d\'implication dans le cours ?',
@@ -254,6 +263,7 @@ def survey():
     if not (filiere_name and class_name and subject_name and token_id):
         flash('Veuillez d\'abord sélectionner filière/classe/matière et fournir un token valide.', 'warning')
         return redirect(url_for('select'))
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
 
     token_obj = EvaluationToken.query.get(token_id)
     if not token_obj or token_obj.is_used:
@@ -261,6 +271,14 @@ def survey():
         return redirect(url_for('select'))
 
     class_questions = ClassQuestion.query.filter_by(class_name=class_name).order_by(ClassQuestion.created_at.asc()).all()
+=======
+
+    token_obj = EvaluationToken.query.get(token_id)
+    if not token_obj or token_obj.is_used:
+        flash('Token invalide ou déjà utilisé.', 'danger')
+        return redirect(url_for('select'))
+
+>>>>>>> main
     form = SurveyForm()
     if request.method == 'POST':
         extra_answers = []
@@ -298,6 +316,8 @@ def survey():
                 overall_satisfaction=int(form.overall_satisfaction.data),
                 feedback=form.feedback.data
             )
+            token_obj.is_used = True
+            token_obj.used_at = datetime.utcnow()
             db.session.add(new_response)
             db.session.flush()
 
@@ -313,6 +333,7 @@ def survey():
             token_obj.is_used = True
             token_obj.used_at = datetime.utcnow()
             db.session.commit()
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
             log_audit('survey_submitted', f'filiere={filiere_name}, classe={class_name}, matiere={subject_name}, extra_questions={len(extra_answers)}')
             session.pop('token_id', None)
             return redirect(url_for('result'))
@@ -323,6 +344,16 @@ def survey():
 
     active_questionnaire = Questionnaire.query.filter_by(is_active=True).order_by(Questionnaire.created_at.desc()).first()
     return render_template('survey.html', form=form, active_questionnaire=active_questionnaire, class_questions=class_questions)
+=======
+            log_audit('survey_submitted', f'filiere={filiere_name}, classe={class_name}, matiere={subject_name}')
+            session.pop('token_id', None)
+            return redirect(url_for('result'))
+
+        flash('Veuillez corriger les erreurs dans le formulaire.', 'danger')
+
+    active_questionnaire = Questionnaire.query.filter_by(is_active=True).order_by(Questionnaire.created_at.desc()).first()
+    return render_template('survey.html', form=form, active_questionnaire=active_questionnaire)
+>>>>>>> main
 
 
 @app.route('/admin')
@@ -334,7 +365,10 @@ def admin():
     matieres = Matiere.query.all()
     teachers = Teacher.query.order_by(Teacher.created_at.desc()).all()
     questionnaires = Questionnaire.query.order_by(Questionnaire.created_at.desc()).all()
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
     class_questions = ClassQuestion.query.order_by(ClassQuestion.class_name.asc(), ClassQuestion.created_at.asc()).all()
+=======
+>>>>>>> main
     campaigns = EvaluationCampaign.query.order_by(EvaluationCampaign.created_at.desc()).all()
     recent_tokens = EvaluationToken.query.order_by(EvaluationToken.created_at.desc()).limit(30).all()
 
@@ -344,8 +378,12 @@ def admin():
         matieres=matieres,
         teachers=teachers,
         questionnaires=questionnaires,
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
         class_questions=class_questions,
         filieres=ALL_FILIERES,
+=======
+        filieres=FILIERES_ITER,
+>>>>>>> main
         campaigns=campaigns,
         recent_tokens=recent_tokens,
     )
@@ -358,7 +396,11 @@ def create_campaign():
 
     name = request.form.get('campaign_name', '').strip()
     filiere = request.form.get('filiere', '').strip()
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
     if not name or filiere not in ALL_FILIERES:
+=======
+    if not name or filiere not in FILIERES_ITER:
+>>>>>>> main
         flash('Nom de campagne ou filière invalide.', 'danger')
         return redirect(url_for('admin'))
 
@@ -369,12 +411,21 @@ def create_campaign():
     flash('Campagne créée avec succès.', 'success')
     return redirect(url_for('admin'))
 
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
 
 @app.route('/activate_campaign/<int:campaign_id>', methods=['POST'])
 def activate_campaign(campaign_id):
     if not ensure_admin_session():
         return redirect(url_for('login'))
 
+=======
+
+@app.route('/activate_campaign/<int:campaign_id>', methods=['POST'])
+def activate_campaign(campaign_id):
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+>>>>>>> main
     campaign = EvaluationCampaign.query.get_or_404(campaign_id)
     EvaluationCampaign.query.filter_by(filiere_name=campaign.filiere_name, is_active=True).update({'is_active': False})
     campaign.is_active = True
@@ -396,6 +447,7 @@ def deactivate_campaign(campaign_id):
     log_audit('campaign_deactivated', f'name={campaign.name}, filiere={campaign.filiere_name}')
     flash(f'Campagne "{campaign.name}" désactivée.', 'success')
     return redirect(url_for('admin'))
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
 
 
 @app.route('/admin/audit', methods=['GET'])
@@ -403,6 +455,15 @@ def admin_audit():
     if not ensure_admin_session():
         return redirect(url_for('login'))
 
+=======
+
+
+@app.route('/admin/audit', methods=['GET'])
+def admin_audit():
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+>>>>>>> main
     logs = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(300).all()
     return render_template('audit_logs.html', logs=logs)
 
@@ -418,7 +479,11 @@ def generate_tokens():
     campaign_id = request.form.get('campaign_id', type=int)
     count = request.form.get('count', type=int)
 
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
     if filiere not in ALL_FILIERES or not classe_name or not subject_name:
+=======
+    if filiere not in FILIERES_ITER or not classe_name or not subject_name:
+>>>>>>> main
         flash('Paramètres de génération invalides.', 'danger')
         return redirect(url_for('admin'))
 
@@ -548,7 +613,11 @@ def teacher_dashboard():
         'teacher_dashboard.html',
         metrics=metrics,
         comments=comments[:30],
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
         filieres=ALL_FILIERES,
+=======
+        filieres=FILIERES_ITER,
+>>>>>>> main
         classes=classes,
         matieres=matieres,
         selected={
@@ -572,24 +641,35 @@ def logout():
 @app.route('/class_subject', methods=['GET', 'POST'])
 def select():
     if request.method == 'POST':
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
         filiere_name = request.form.get('filiere', '').strip()
+=======
+        filiere_name = request.form.get('filiere')
+>>>>>>> main
         classe_id = request.form.get('classe')
         matiere_id = request.form.get('matiere')
         access_token = request.form.get('access_token', '').strip().upper()
 
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
         if classe_id and matiere_id and access_token:
+=======
+        if filiere_name and classe_id and matiere_id and access_token:
+>>>>>>> main
             classe = Classe.query.get(classe_id)
             matiere = Matiere.query.get(matiere_id)
             if not classe or not matiere:
                 flash('Classe ou matière invalide.', 'danger')
                 return redirect(url_for('select'))
 
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
             if is_l1_class(classe.nom):
                 filiere_name = L1_LABEL
             elif filiere_name not in FILIERES_ITER:
                 flash('Veuillez sélectionner une filière valide pour les classes de L2 et plus.', 'danger')
                 return redirect(url_for('select'))
 
+=======
+>>>>>>> main
             token_obj = EvaluationToken.query.filter_by(
                 token=access_token,
                 filiere_name=filiere_name,
@@ -614,11 +694,19 @@ def select():
             log_audit('token_validated', f'token={access_token}, filiere={filiere_name}, classe={classe.nom}, matiere={matiere.nom}')
             return redirect(url_for('survey'))
 
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
         flash('Veuillez sélectionner une classe, une matière et saisir un token.', 'danger')
 
     classes = Classe.query.all()
     matieres = Matiere.query.all()
     return render_template('class_subject.html', classes=classes, matieres=matieres, filieres=ALL_FILIERES)
+=======
+        flash('Veuillez sélectionner une filière, une classe, une matière et saisir un token.', 'danger')
+
+    classes = Classe.query.all()
+    matieres = Matiere.query.all()
+    return render_template('class_subject.html', classes=classes, matieres=matieres, filieres=FILIERES_ITER)
+>>>>>>> main
 
 
 @app.route('/result')
@@ -719,7 +807,11 @@ def dashboard():
     return render_template(
         'dashboard.html',
         metrics=metrics,
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
         filieres=ALL_FILIERES,
+=======
+        filieres=FILIERES_ITER,
+>>>>>>> main
         classes=classes,
         matieres=matieres,
         selected={
@@ -913,6 +1005,7 @@ def toggle_teacher_status():
     return redirect(url_for('admin'))
 
 
+<<<<<<< codex/evaluate-and-adapt-evaluation-system-repository-7tkgnk
 @app.route('/add_class_question', methods=['POST'])
 def add_class_question():
     if not ensure_admin_session():
@@ -951,6 +1044,8 @@ def delete_class_question():
     return redirect(url_for('admin'))
 
 
+=======
+>>>>>>> main
 @app.route('/add_questionnaire', methods=['POST'])
 def add_questionnaire():
     if not ensure_admin_session():
