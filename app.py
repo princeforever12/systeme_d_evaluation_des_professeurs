@@ -438,6 +438,7 @@ def teacher_login():
             flash('Connexion enseignant réussie.', 'success')
             return redirect(url_for('teacher_dashboard'))
         flash('Identifiants enseignant incorrects.', 'danger')
+
     return render_template('teacher_login.html')
 
 
