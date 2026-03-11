@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Journal d'audit</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+    <div class="container mx-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-red-700">Journal d'audit</h1>
+            <a href="{{ url_for('admin') }}" class="bg-red-700 text-white px-4 py-2 rounded hover:bg-red-800">Retour admin</a>
+        </div>
+
+        <div class="bg-white rounded-xl shadow overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-red-700 text-white">
+                    <tr>
+                        <th class="p-3 text-left">Date</th>
+                        <th class="p-3 text-left">Acteur</th>
+                        <th class="p-3 text-left">Action</th>
+                        <th class="p-3 text-left">Détails</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                        <tr class="border-b">
+                            <td class="p-3">{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td class="p-3">{{ log.actor }}</td>
+                            <td class="p-3 font-semibold">{{ log.action }}</td>
+                            <td class="p-3 text-gray-700">{{ log.details }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td class="p-4 text-gray-500" colspan="4">Aucun log disponible.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

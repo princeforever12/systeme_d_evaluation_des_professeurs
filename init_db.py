@@ -7,8 +7,8 @@ def init_db():
         db.create_all()
 
         # Ajouter des données d'exemple
-        classes = ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2']
-        matieres = ['Mathématiques', 'Anglais', 'SQL']
+        classes = ['L2 I', 'L2 IMT', 'L2 EEA', 'L3 I', 'L3 IMT', 'L3 EEA']
+        matieres = ['Algorithmique', 'Bases de Données', 'Réseaux', 'Électronique']
 
         for nom in classes:
             db.session.add(Classe(nom=nom))
