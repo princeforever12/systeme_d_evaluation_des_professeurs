@@ -131,18 +131,6 @@ class Phase5SecurityAuditTest(unittest.TestCase):
             sess['token_id'] = token_id
 
         data = {
-            'involvement': '5',
-            'initial_knowledge': '5',
-            'current_knowledge': '5',
-            'professor_motivation': '5',
-            'tools_methodology': '5',
-            'examples_exercises': '5',
-            'explanations_clarity': '5',
-            'practical_skills': 'oui',
-            'course_organization': 'oui',
-            'schedule_organization': '5',
-            'infrastructure_quality': '5',
-            'overall_satisfaction': '5',
             'feedback': 'ok',
             f'class_question_{class_question_id}': ''
         }
