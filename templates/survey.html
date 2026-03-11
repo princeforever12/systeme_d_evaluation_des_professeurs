@@ -115,6 +115,14 @@ h1 {
         <form method="POST" class="survey-form">
             {{ form.hidden_tag() }}
             <h1>Évaluation du cours</h1>
+            {% if active_questionnaire %}
+                <div class="form-group" style="background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:12px;">
+                    <p style="font-weight:600; color:#991b1b; margin:0 0 4px 0;">{{ active_questionnaire.title }}</p>
+                    {% if active_questionnaire.description %}
+                        <p style="margin:0; color:#7f1d1d;">{{ active_questionnaire.description }}</p>
+                    {% endif %}
+                </div>
+            {% endif %}
             
             <div class="form-group">
                 {{ form.involvement.label }}

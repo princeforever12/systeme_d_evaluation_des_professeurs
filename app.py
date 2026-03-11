@@ -72,6 +72,14 @@ class Teacher(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 
+class Questionnaire(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(180), nullable=False)
+    description = db.Column(db.String(500), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
 class SurveyResponse(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filiere_name = db.Column(db.String(20), nullable=False, default='I')
@@ -260,7 +268,8 @@ def survey():
 
         flash('Veuillez corriger les erreurs dans le formulaire.', 'danger')
 
-    return render_template('survey.html', form=form)
+    active_questionnaire = Questionnaire.query.filter_by(is_active=True).order_by(Questionnaire.created_at.desc()).first()
+    return render_template('survey.html', form=form, active_questionnaire=active_questionnaire)
 
 
 @app.route('/admin')
@@ -271,6 +280,7 @@ def admin():
     classes = Classe.query.all()
     matieres = Matiere.query.all()
     teachers = Teacher.query.order_by(Teacher.created_at.desc()).all()
+    questionnaires = Questionnaire.query.order_by(Questionnaire.created_at.desc()).all()
     campaigns = EvaluationCampaign.query.order_by(EvaluationCampaign.created_at.desc()).all()
     recent_tokens = EvaluationToken.query.order_by(EvaluationToken.created_at.desc()).limit(30).all()
 
@@ -279,6 +289,7 @@ def admin():
         classes=classes,
         matieres=matieres,
         teachers=teachers,
+        questionnaires=questionnaires,
         filieres=FILIERES_ITER,
         campaigns=campaigns,
         recent_tokens=recent_tokens,
@@ -838,6 +849,73 @@ def toggle_teacher_status():
     db.session.commit()
     log_audit('teacher_status_changed', f'username={teacher.username}, is_active={teacher.is_active}')
     flash('Statut enseignant mis à jour.', 'success')
+    return redirect(url_for('admin'))
+
+
+@app.route('/add_questionnaire', methods=['POST'])
+def add_questionnaire():
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    title = request.form.get('questionnaire_title', '').strip()
+    description = request.form.get('questionnaire_description', '').strip()
+    is_active = bool(request.form.get('questionnaire_active'))
+
+    if not title:
+        flash('Le titre du questionnaire est obligatoire.', 'danger')
+        return redirect(url_for('admin'))
+
+    q = Questionnaire(title=title, description=description or None, is_active=is_active)
+    db.session.add(q)
+    db.session.commit()
+    log_audit('questionnaire_added', f'title={title}, active={is_active}')
+    flash('Questionnaire ajouté avec succès.', 'success')
+    return redirect(url_for('admin'))
+
+
+@app.route('/edit_questionnaire/<int:questionnaire_id>', methods=['GET', 'POST'])
+def edit_questionnaire(questionnaire_id):
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    questionnaire = Questionnaire.query.get_or_404(questionnaire_id)
+
+    if request.method == 'POST':
+        title = request.form.get('questionnaire_title', '').strip()
+        description = request.form.get('questionnaire_description', '').strip()
+        is_active = bool(request.form.get('questionnaire_active'))
+
+        if not title:
+            flash('Le titre du questionnaire est obligatoire.', 'danger')
+            return redirect(url_for('edit_questionnaire', questionnaire_id=questionnaire_id))
+
+        questionnaire.title = title
+        questionnaire.description = description or None
+        questionnaire.is_active = is_active
+        db.session.commit()
+        log_audit('questionnaire_updated', f'id={questionnaire_id}, title={title}, active={is_active}')
+        flash('Questionnaire modifié avec succès.', 'success')
+        return redirect(url_for('admin'))
+
+    return render_template('edit_questionnaire.html', questionnaire=questionnaire)
+
+
+@app.route('/delete_questionnaire', methods=['POST'])
+def delete_questionnaire():
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    questionnaire_id = request.form.get('questionnaire_id', type=int)
+    questionnaire = Questionnaire.query.get(questionnaire_id)
+    if not questionnaire:
+        flash('Questionnaire introuvable.', 'danger')
+        return redirect(url_for('admin'))
+
+    title = questionnaire.title
+    db.session.delete(questionnaire)
+    db.session.commit()
+    log_audit('questionnaire_deleted', f'id={questionnaire_id}, title={title}')
+    flash('Questionnaire supprimé avec succès.', 'success')
     return redirect(url_for('admin'))
 
 
