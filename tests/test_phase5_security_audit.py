@@ -1,6 +1,6 @@
 import unittest
 
-from app import app, db, Classe, Matiere, AuditLog, Teacher, run_schema_updates
+from app import app, db, Classe, Matiere, AuditLog, Teacher, EvaluationCampaign, EvaluationToken, ClassQuestion, run_schema_updates
 
 
 class Phase5SecurityAuditTest(unittest.TestCase):
@@ -80,6 +80,79 @@ class Phase5SecurityAuditTest(unittest.TestCase):
         self.assertEqual(login_resp.status_code, 200)
         self.assertIn(b'Dashboard Enseignant', login_resp.data)
 
+
+
+    def test_l1_class_does_not_require_filiere_for_token_validation(self):
+        with app.app_context():
+            if not Classe.query.filter_by(nom='L1').first():
+                db.session.add(Classe(nom='L1'))
+            mat = Matiere.query.first()
+            camp = EvaluationCampaign(name='Campagne L1', filiere_name='L1 (sans filière)', is_active=True)
+            db.session.add(camp)
+            db.session.flush()
+            token = EvaluationToken(token='L1TOKEN0001', filiere_name='L1 (sans filière)', class_name='L1', subject_name=mat.nom, is_used=False, campaign_id=camp.id)
+            db.session.add(token)
+            db.session.commit()
+
+        with app.app_context():
+            l1_id = Classe.query.filter_by(nom='L1').first().id
+            matiere_id = Matiere.query.first().id
+
+        resp = self.client.post('/class_subject', data={
+            'filiere': '',
+            'classe': str(l1_id),
+            'matiere': str(matiere_id),
+            'access_token': 'L1TOKEN0001'
+        }, follow_redirects=False)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('/survey', resp.headers.get('Location', ''))
+
+    def test_class_specific_text_question_is_required(self):
+        with app.app_context():
+            classe = Classe.query.filter_by(nom='L2 I').first()
+            mat = Matiere.query.first()
+            q = ClassQuestion(class_name='L2 I', question_text='Que faut-il améliorer ?', response_type='text')
+            camp = EvaluationCampaign(name='Campagne L2', filiere_name='I', is_active=True)
+            db.session.add_all([q, camp])
+            db.session.flush()
+            token = EvaluationToken(token='TOKENTEST22', filiere_name='I', class_name=classe.nom, subject_name=mat.nom, is_used=False, campaign_id=camp.id)
+            db.session.add(token)
+            db.session.commit()
+
+        with app.app_context():
+            subject_name = Matiere.query.first().nom
+            token_id = EvaluationToken.query.filter_by(token='TOKENTEST22').first().id
+            class_question_id = ClassQuestion.query.filter_by(class_name='L2 I').first().id
+
+        with self.client.session_transaction() as sess:
+            sess['filiere_name'] = 'I'
+            sess['class_name'] = 'L2 I'
+            sess['subject_name'] = subject_name
+            sess['token_id'] = token_id
+
+        data = {
+            'involvement': '5',
+            'initial_knowledge': '5',
+            'current_knowledge': '5',
+            'professor_motivation': '5',
+            'tools_methodology': '5',
+            'examples_exercises': '5',
+            'explanations_clarity': '5',
+            'practical_skills': 'oui',
+            'course_organization': 'oui',
+            'schedule_organization': '5',
+            'infrastructure_quality': '5',
+            'overall_satisfaction': '5',
+            'feedback': 'ok',
+            f'class_question_{class_question_id}': ''
+        }
+        resp = self.client.post('/survey', data=data, follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b'Que faut-il am', resp.data)
+
+        with app.app_context():
+            token = EvaluationToken.query.filter_by(token='TOKENTEST22').first()
+            self.assertFalse(token.is_used)
 
 if __name__ == '__main__':
     unittest.main()

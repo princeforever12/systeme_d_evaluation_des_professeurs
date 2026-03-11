@@ -22,13 +22,16 @@
 
         <form method="POST" class="space-y-5">
             <div>
-                <label for="filiere" class="block text-gray-700 mb-2">Filière :</label>
-                <select name="filiere" id="filiere" required class="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-500">
-                    <option value="">Sélectionner une filière</option>
+                <label for="filiere" class="block text-gray-700 mb-2">Filière (L2 et + seulement) :</label>
+                <select name="filiere" id="filiere" class="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-500">
+                    <option value="">Aucune (obligatoire seulement en L2 et +)</option>
                     {% for filiere in filieres %}
-                        <option value="{{ filiere }}">{{ filiere }}</option>
+                        {% if filiere != 'L1 (sans filière)' %}
+                            <option value="{{ filiere }}">{{ filiere }}</option>
+                        {% endif %}
                     {% endfor %}
                 </select>
+                <p class="text-xs text-gray-500 mt-1">En L1, aucune filière n'est demandée. Les filières I/IMT/EEA commencent en L2.</p>
             </div>
 
             <div>
@@ -65,5 +68,22 @@
             </div>
         </form>
     </div>
+    <script>
+        const classeSelect = document.getElementById('classe');
+        const filiereSelect = document.getElementById('filiere');
+
+        function updateFiliereRequirement() {
+            const selectedText = classeSelect.options[classeSelect.selectedIndex]?.text || '';
+            const isL1 = selectedText.trim().toUpperCase().startsWith('L1');
+            filiereSelect.required = !isL1;
+            filiereSelect.disabled = isL1;
+            if (isL1) {
+                filiereSelect.value = '';
+            }
+        }
+
+        classeSelect.addEventListener('change', updateFiliereRequirement);
+        updateFiliereRequirement();
+    </script>
 </body>
 </html>
