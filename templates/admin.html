@@ -144,6 +144,44 @@
             </form>
         </div>
 
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-2xl font-bold mb-4 text-red-700">Gestion des Enseignants</h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <form method="POST" action="{{ url_for('add_teacher') }}" class="space-y-2 border rounded p-4">
+                    <label class="font-semibold">Ajouter un enseignant</label>
+                    <input type="text" name="teacher_full_name" placeholder="Nom complet" class="w-full p-2 border rounded">
+                    <input type="text" name="teacher_username" placeholder="Nom d'utilisateur" required class="w-full p-2 border rounded">
+                    <input type="password" name="teacher_password" placeholder="Mot de passe" required class="w-full p-2 border rounded">
+                    <button class="bg-red-700 text-white px-4 py-2 rounded hover:bg-red-800">Ajouter</button>
+                </form>
+
+                <div class="border rounded p-4">
+                    <label class="font-semibold block mb-2">Enseignants inscrits</label>
+                    <div class="space-y-2 max-h-64 overflow-y-auto">
+                        {% for teacher in teachers %}
+                            <div class="flex items-center justify-between border rounded p-2">
+                                <div>
+                                    <p class="font-semibold">{{ teacher.full_name or teacher.username }}</p>
+                                    <p class="text-xs text-gray-500">@{{ teacher.username }}</p>
+                                </div>
+                                <form method="POST" action="{{ url_for('toggle_teacher_status') }}">
+                                    <input type="hidden" name="teacher_id" value="{{ teacher.id }}">
+                                    {% if teacher.is_active %}
+                                        <button class="bg-gray-700 text-white px-3 py-1 rounded text-sm">Désactiver</button>
+                                    {% else %}
+                                        <button class="bg-red-700 text-white px-3 py-1 rounded text-sm">Activer</button>
+                                    {% endif %}
+                                </form>
+                            </div>
+                        {% else %}
+                            <p class="text-gray-500">Aucun enseignant enregistré.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="bg-white rounded-xl shadow p-6">
             <h2 class="text-2xl font-bold mb-4 text-slate-700">Gestion des Matières et Classes</h2>
             <div class="grid md:grid-cols-2 gap-6">

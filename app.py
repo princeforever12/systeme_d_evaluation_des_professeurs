@@ -63,6 +63,15 @@ class AuditLog(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 
+class Teacher(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    full_name = db.Column(db.String(150), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
 class SurveyResponse(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filiere_name = db.Column(db.String(20), nullable=False, default='I')
@@ -261,6 +270,7 @@ def admin():
 
     classes = Classe.query.all()
     matieres = Matiere.query.all()
+    teachers = Teacher.query.order_by(Teacher.created_at.desc()).all()
     campaigns = EvaluationCampaign.query.order_by(EvaluationCampaign.created_at.desc()).all()
     recent_tokens = EvaluationToken.query.order_by(EvaluationToken.created_at.desc()).limit(30).all()
 
@@ -268,6 +278,7 @@ def admin():
         'admin.html',
         classes=classes,
         matieres=matieres,
+        teachers=teachers,
         filieres=FILIERES_ITER,
         campaigns=campaigns,
         recent_tokens=recent_tokens,
@@ -415,7 +426,12 @@ def teacher_login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        if username == TEACHER_USERNAME and check_password_hash(TEACHER_PASSWORD_HASH, password):
+
+        db_teacher = Teacher.query.filter_by(username=username, is_active=True).first()
+        is_db_teacher_valid = db_teacher and check_password_hash(db_teacher.password_hash, password)
+        is_fallback_teacher_valid = username == TEACHER_USERNAME and check_password_hash(TEACHER_PASSWORD_HASH, password)
+
+        if is_db_teacher_valid or is_fallback_teacher_valid:
             session['teacher'] = True
             session['teacher_username'] = username
             log_audit('teacher_login', f'user={username}')
@@ -773,6 +789,55 @@ def delete_classe():
             db.session.commit()
             log_audit('classe_deleted', f'nom={classe_to_delete.nom}')
             flash('Classe supprimée avec succès.', 'success')
+    return redirect(url_for('admin'))
+
+
+@app.route('/add_teacher', methods=['POST'])
+def add_teacher():
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    username = request.form.get('teacher_username', '').strip()
+    password = request.form.get('teacher_password', '').strip()
+    full_name = request.form.get('teacher_full_name', '').strip()
+
+    if not username or not password:
+        flash('Nom d\'utilisateur et mot de passe enseignant requis.', 'danger')
+        return redirect(url_for('admin'))
+
+    existing = Teacher.query.filter_by(username=username).first()
+    if existing:
+        flash('Ce nom d\'utilisateur enseignant existe déjà.', 'warning')
+        return redirect(url_for('admin'))
+
+    teacher = Teacher(
+        username=username,
+        password_hash=generate_password_hash(password),
+        full_name=full_name or None,
+        is_active=True,
+    )
+    db.session.add(teacher)
+    db.session.commit()
+    log_audit('teacher_added', f'username={username}, full_name={full_name}')
+    flash('Enseignant ajouté avec succès.', 'success')
+    return redirect(url_for('admin'))
+
+
+@app.route('/toggle_teacher_status', methods=['POST'])
+def toggle_teacher_status():
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    teacher_id = request.form.get('teacher_id', type=int)
+    teacher = Teacher.query.get(teacher_id)
+    if not teacher:
+        flash('Enseignant introuvable.', 'danger')
+        return redirect(url_for('admin'))
+
+    teacher.is_active = not teacher.is_active
+    db.session.commit()
+    log_audit('teacher_status_changed', f'username={teacher.username}, is_active={teacher.is_active}')
+    flash('Statut enseignant mis à jour.', 'success')
     return redirect(url_for('admin'))
 
 

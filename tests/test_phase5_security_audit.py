@@ -1,6 +1,6 @@
 import unittest
 
-from app import app, db, Classe, Matiere, AuditLog, run_schema_updates
+from app import app, db, Classe, Matiere, AuditLog, Teacher, run_schema_updates
 
 
 class Phase5SecurityAuditTest(unittest.TestCase):
@@ -55,6 +55,30 @@ class Phase5SecurityAuditTest(unittest.TestCase):
         ok = self.client.get('/admin/audit')
         self.assertEqual(ok.status_code, 200)
         self.assertIn(b"Journal d'audit", ok.data)
+
+    def test_admin_can_add_teacher_and_teacher_can_login(self):
+        with self.client.session_transaction() as sess:
+            sess['admin'] = True
+            sess['username'] = 'admin'
+
+        add_resp = self.client.post('/add_teacher', data={
+            'teacher_full_name': 'Mme Test',
+            'teacher_username': 'mme.test',
+            'teacher_password': 'secret123'
+        }, follow_redirects=True)
+        self.assertEqual(add_resp.status_code, 200)
+
+        with app.app_context():
+            t = Teacher.query.filter_by(username='mme.test').first()
+            self.assertIsNotNone(t)
+            self.assertTrue(t.is_active)
+
+        login_resp = self.client.post('/teacher/login', data={
+            'username': 'mme.test',
+            'password': 'secret123'
+        }, follow_redirects=True)
+        self.assertEqual(login_resp.status_code, 200)
+        self.assertIn(b'Dashboard Enseignant', login_resp.data)
 
 
 if __name__ == '__main__':
