@@ -170,7 +170,7 @@ def ensure_teacher_session():
 
 
 def log_audit(action, details=''):
-    actor = session.get('username', 'anonymous')
+    actor = session.get('username') or session.get('teacher_username') or 'anonymous'
     db.session.add(AuditLog(actor=actor, action=action, details=details[:500]))
     db.session.commit()
 
@@ -305,6 +305,29 @@ def activate_campaign(campaign_id):
     log_audit('campaign_activated', f'name={campaign.name}, filiere={campaign.filiere_name}')
     flash(f'Campagne "{campaign.name}" activée pour la filière {campaign.filiere_name}.', 'success')
     return redirect(url_for('admin'))
+
+
+
+@app.route('/deactivate_campaign/<int:campaign_id>', methods=['POST'])
+def deactivate_campaign(campaign_id):
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    campaign = EvaluationCampaign.query.get_or_404(campaign_id)
+    campaign.is_active = False
+    db.session.commit()
+    log_audit('campaign_deactivated', f'name={campaign.name}, filiere={campaign.filiere_name}')
+    flash(f'Campagne "{campaign.name}" désactivée.', 'success')
+    return redirect(url_for('admin'))
+
+
+@app.route('/admin/audit', methods=['GET'])
+def admin_audit():
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    logs = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(300).all()
+    return render_template('audit_logs.html', logs=logs)
 
 
 @app.route('/generate_tokens', methods=['POST'])

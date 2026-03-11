@@ -57,3 +57,4 @@ Un guide d’analyse et de migration vers le contexte **Département ITER (I/IMT
 - Journal d'audit des actions sensibles (connexion admin, campagnes, tokens, gestion classes/matières, reset).
 - Endpoint de supervision `/health`.
 - Tests automatisés initiaux (santé + audit login).
+- Consultation du journal d'audit via interface admin et fermeture de campagne.

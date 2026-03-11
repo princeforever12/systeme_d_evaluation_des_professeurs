@@ -44,6 +44,18 @@ class Phase5SecurityAuditTest(unittest.TestCase):
             self.assertIsNotNone(latest)
             self.assertEqual(latest.action, 'teacher_login')
 
+    def test_admin_audit_page_requires_admin_and_loads(self):
+        denied = self.client.get('/admin/audit', follow_redirects=False)
+        self.assertEqual(denied.status_code, 302)
+
+        with self.client.session_transaction() as sess:
+            sess['admin'] = True
+            sess['username'] = 'admin'
+
+        ok = self.client.get('/admin/audit')
+        self.assertEqual(ok.status_code, 200)
+        self.assertIn(b"Journal d'audit", ok.data)
+
 
 if __name__ == '__main__':
     unittest.main()
