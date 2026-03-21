@@ -5,126 +5,313 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Page Administrateur</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
-    <style>
-        body {
-            background: linear-gradient(135deg, #f0f4ff, #e6f0ff);
-        }
-        .form-container {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s ease;
-        }
-        .form-container:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-        }
-        .button {
-            transition: all 0.3s ease;
-        }
-        .button:hover {
-            transform: scale(1.05);
-        }
-    </style>
 </head>
 <body class="bg-gray-50 min-h-screen p-6">
-    <!-- Barre de navigation -->
-    <nav class="bg-gradient-to-r from-blue-600 to-purple-600 p-4 text-white mb-8 shadow-lg">
+    <nav class="bg-gradient-to-r from-red-700 to-red-900 p-4 text-white mb-8 shadow-lg rounded">
         <div class="container mx-auto flex justify-between items-center">
-            <h3 class="text-2xl font-bold">Administration</h3>
+            <h3 class="text-2xl font-bold">Administration ITER - UTT-LOKO</h3>
             <div class="flex space-x-4">
                 <a href="{{ url_for('home') }}" class="hover:text-gray-200 transition">Accueil</a>
                 <a href="{{ url_for('change_credentials') }}" class="hover:text-gray-200 transition">Modifier les identifiants</a>
-                <a href="{{ url_for('show_table') }}" class="hover:text-gray-200 transition">Afficher les réponses du sondage</a>
+                <a href="{{ url_for('show_table') }}" class="hover:text-gray-200 transition">Afficher les réponses</a>
+                <a href="{{ url_for('admin_audit') }}" class="hover:text-gray-200 transition">Journal d'audit</a>
                 <a href="{{ url_for('logout') }}" class="text-red-300 hover:text-red-200 transition">Se déconnecter</a>
             </div>
         </div>
     </nav>
 
-    <div class="container mx-auto">
-        <!-- Section Rapport -->
-        <div class="form-container p-6 mb-8">
-            <h2 class="text-2xl font-bold mb-4 text-blue-600">Générer un Rapport</h2>
-            <form action="{{ url_for('generate_report') }}" method="post" class="space-y-4">
-                <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
-                    <label for="classe" class="text-gray-700">Sélectionnez une classe :</label>
-                    <select name="classe" id="classe" required class="p-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 w-full md:w-auto">
-                        {% for classe in classes %}
-                            <option value="{{ classe.nom }}">{{ classe.nom }}</option>
-                        {% endfor %}
-                    </select>
+    <div class="container mx-auto space-y-8">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="space-y-2">
+                    {% for category, message in messages %}
+                        <p class="p-3 rounded {{ 'bg-red-100 text-red-700' if category in ['danger'] else 'bg-yellow-100 text-yellow-700' if category in ['warning'] else 'bg-green-100 text-green-700' }}">{{ message }}</p>
+                    {% endfor %}
                 </div>
-                <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
-                    <label for="matiere" class="text-gray-700">Sélectionnez une matière :</label>
-                    <select name="matiere" id="matiere" required class="p-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 w-full md:w-auto">
+            {% endif %}
+        {% endwith %}
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-2xl font-bold mb-4 text-red-700">Phase 3 - Campagnes & tokens anonymes</h2>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="border rounded-lg p-4">
+                    <h3 class="text-lg font-semibold mb-3">Créer une campagne</h3>
+                    <form method="POST" action="{{ url_for('create_campaign') }}" class="space-y-3">
+                        <input type="text" name="campaign_name" placeholder="Ex: Campagne S1 2026" required class="w-full p-2 border rounded">
+                        <select name="filiere" required class="w-full p-2 border rounded">
+                            <option value="">Filière</option>
+                            {% for filiere in filieres %}<option value="{{ filiere }}">{{ filiere }}</option>{% endfor %}
+                        </select>
+                        <button class="bg-red-700 text-white px-4 py-2 rounded">Créer</button>
+                    </form>
+                </div>
+
+                <div class="border rounded-lg p-4">
+                    <h3 class="text-lg font-semibold mb-3">Générer des tokens</h3>
+                    <form method="POST" action="{{ url_for('generate_tokens') }}" class="space-y-3">
+                        <select name="campaign_id" required class="w-full p-2 border rounded">
+                            <option value="">Campagne</option>
+                            {% for campaign in campaigns %}
+                                <option value="{{ campaign.id }}">{{ campaign.name }} ({{ campaign.filiere_name }}) {% if campaign.is_active %}- ACTIVE{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                        <select name="filiere" required class="w-full p-2 border rounded">
+                            <option value="">Filière</option>
+                            {% for filiere in filieres %}<option value="{{ filiere }}">{{ filiere }}</option>{% endfor %}
+                        </select>
+                        <select name="classe_name" required class="w-full p-2 border rounded">
+                            <option value="">Classe</option>
+                            {% for classe in classes %}<option value="{{ classe.nom }}">{{ classe.nom }}</option>{% endfor %}
+                        </select>
+                        <select name="subject_name" required class="w-full p-2 border rounded">
+                            <option value="">Matière</option>
+                            {% for matiere in matieres %}<option value="{{ matiere.nom }}">{{ matiere.nom }}</option>{% endfor %}
+                        </select>
+                        <input type="number" name="count" min="1" max="200" value="10" required class="w-full p-2 border rounded">
+                        <button class="bg-red-700 text-white px-4 py-2 rounded">Générer</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="mt-6 grid md:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="text-lg font-semibold mb-2">Campagnes</h3>
+                    <div class="space-y-2 max-h-64 overflow-y-auto">
+                        {% for campaign in campaigns %}
+                            <div class="border p-3 rounded flex justify-between items-center">
+                                <div>
+                                    <p class="font-semibold">{{ campaign.name }}</p>
+                                    <p class="text-sm text-gray-500">{{ campaign.filiere_name }} • {{ campaign.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                                </div>
+                                {% if campaign.is_active %}
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-green-700 bg-green-100 px-2 py-1 rounded text-sm">Active</span>
+                                        <form method="POST" action="{{ url_for('deactivate_campaign', campaign_id=campaign.id) }}">
+                                            <button class="bg-gray-700 text-white px-3 py-1 rounded text-sm">Fermer</button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('delete_campaign', campaign_id=campaign.id) }}" onsubmit="return confirm('Supprimer cette campagne ? Les tokens restent disponibles mais détachés de la campagne.');">
+                                            <button class="bg-red-700 text-white px-3 py-1 rounded text-sm">Supprimer</button>
+                                        </form>
+                                    </div>
+                                {% else %}
+                                    <div class="flex items-center gap-2">
+                                        <form method="POST" action="{{ url_for('activate_campaign', campaign_id=campaign.id) }}">
+                                            <button class="bg-red-500 text-white px-3 py-1 rounded text-sm">Activer</button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('delete_campaign', campaign_id=campaign.id) }}" onsubmit="return confirm('Supprimer cette campagne ? Les tokens restent disponibles mais détachés de la campagne.');">
+                                            <button class="bg-red-700 text-white px-3 py-1 rounded text-sm">Supprimer</button>
+                                        </form>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <p class="text-gray-500">Aucune campagne créée.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-lg font-semibold mb-2">Derniers tokens générés</h3>
+                    <div class="space-y-2 max-h-64 overflow-y-auto">
+                        {% for token in recent_tokens %}
+                            <div class="border p-3 rounded">
+                                <p class="font-mono text-sm">{{ token.token }}</p>
+                                <p class="text-xs text-gray-600">{{ token.filiere_name }} • {{ token.class_name }} • {{ token.subject_name }}</p>
+                                <p class="text-xs {{ 'text-red-600' if token.is_used else 'text-slate-700' }}">{{ 'Utilisé' if token.is_used else 'Disponible' }}</p>
+                            </div>
+                        {% else %}
+                            <p class="text-gray-500">Aucun token généré.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-2xl font-bold mb-4 text-red-700">Gestion des Questionnaires</h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <form method="POST" action="{{ url_for('add_questionnaire') }}" class="space-y-3 border rounded p-4">
+                    <label class="font-semibold">Ajouter un questionnaire</label>
+                    <input type="text" name="questionnaire_title" placeholder="Titre du questionnaire" required class="w-full p-2 border rounded">
+                    <textarea name="questionnaire_description" rows="3" placeholder="Description (optionnelle)" class="w-full p-2 border rounded"></textarea>
+                    <label class="inline-flex items-center gap-2 text-sm">
+                        <input type="checkbox" name="questionnaire_active" value="1" checked>
+                        Actif
+                    </label>
+                    <button class="bg-red-700 text-white px-4 py-2 rounded hover:bg-red-800">Ajouter</button>
+                </form>
+
+                <div class="border rounded p-4">
+                    <label class="font-semibold block mb-2">Questionnaires existants</label>
+                    <div class="space-y-2 max-h-64 overflow-y-auto">
+                        {% for questionnaire in questionnaires %}
+                            <div class="border rounded p-3 flex items-start justify-between gap-3">
+                                <div>
+                                    <p class="font-semibold">{{ questionnaire.title }}</p>
+                                    {% if questionnaire.description %}
+                                        <p class="text-sm text-gray-600">{{ questionnaire.description }}</p>
+                                    {% endif %}
+                                    <p class="text-xs text-gray-500 mt-1">{{ questionnaire.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    {% if questionnaire.is_active %}
+                                        <span class="text-green-700 bg-green-100 px-2 py-1 rounded text-xs">Actif</span>
+                                    {% else %}
+                                        <span class="text-gray-700 bg-gray-100 px-2 py-1 rounded text-xs">Inactif</span>
+                                    {% endif %}
+                                    <a href="{{ url_for('edit_questionnaire', questionnaire_id=questionnaire.id) }}" class="bg-blue-600 text-white px-2 py-1 rounded text-xs">Modifier</a>
+                                    <form method="POST" action="{{ url_for('delete_questionnaire') }}" onsubmit="return confirm('Supprimer ce questionnaire ?');">
+                                        <input type="hidden" name="questionnaire_id" value="{{ questionnaire.id }}">
+                                        <button class="bg-red-600 text-white px-2 py-1 rounded text-xs">Supprimer</button>
+                                    </form>
+                                </div>
+                            </div>
+                        {% else %}
+                            <p class="text-gray-500">Aucun questionnaire enregistré.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-2xl font-bold mb-4 text-red-700">Questions par classe</h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <form method="POST" action="{{ url_for('add_class_question') }}" class="space-y-3 border rounded p-4">
+                    <label class="font-semibold">Ajouter une question spécifique</label>
+                    <select name="class_name" required class="w-full p-2 border rounded">
+                        <option value="">Classe</option>
+                        {% for classe in classes %}<option value="{{ classe.nom }}">{{ classe.nom }}</option>{% endfor %}
+                    </select>
+                    <textarea name="question_text" rows="3" placeholder="Texte de la question" required class="w-full p-2 border rounded"></textarea>
+                    <select name="response_type" required class="w-full p-2 border rounded">
+                        <option value="scale">Note de 0 à 10</option>
+                        <option value="text">Réponse libre (zone de texte)</option>
+                    </select>
+                    <button class="bg-red-700 text-white px-4 py-2 rounded hover:bg-red-800">Ajouter</button>
+                </form>
+
+                <div class="border rounded p-4">
+                    <label class="font-semibold block mb-2">Questions enregistrées</label>
+                    <div class="space-y-2 max-h-64 overflow-y-auto">
+                        {% for question in class_questions %}
+                            <div class="border rounded p-3 flex items-start justify-between gap-3">
+                                <div>
+                                    <p class="font-semibold">{{ question.class_name }} • {{ '0-10' if question.response_type == 'scale' else 'Texte libre' }}</p>
+                                    <p class="text-sm text-gray-700">{{ question.question_text }}</p>
+                                </div>
+                                <form method="POST" action="{{ url_for('delete_class_question') }}" onsubmit="return confirm('Supprimer cette question ?');">
+                                    <input type="hidden" name="question_id" value="{{ question.id }}">
+                                    <button class="bg-red-600 text-white px-2 py-1 rounded text-xs">Supprimer</button>
+                                </form>
+                            </div>
+                        {% else %}
+                            <p class="text-gray-500">Aucune question de classe enregistrée.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-2xl font-bold mb-4 text-red-700">Dashboard décisionnel</h2>
+            <p class="text-gray-600 mb-4">Consultez les indicateurs clés et exportez les données filtrées.</p>
+            <a href="{{ url_for('dashboard') }}" class="bg-red-700 text-white px-6 py-2 rounded-lg hover:bg-red-800">Ouvrir le dashboard</a>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-2xl font-bold mb-4 text-red-700">Générer un Rapport</h2>
+            <form action="{{ url_for('generate_report') }}" method="post" class="space-y-4">
+                <select name="filiere" required class="w-full p-2 border rounded">
+                    <option value="">Filière</option>
+                    {% for filiere in filieres %}<option value="{{ filiere }}">{{ filiere }}</option>{% endfor %}
+                </select>
+                <select name="classe" required class="w-full p-2 border rounded">
+                    {% for classe in classes %}<option value="{{ classe.nom }}">{{ classe.nom }}</option>{% endfor %}
+                </select>
+                <select name="matiere" required class="w-full p-2 border rounded">
+                    {% for matiere in matieres %}<option value="{{ matiere.nom }}">{{ matiere.nom }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-700">Générer le Rapport</button>
+            </form>
+        </div>
+
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-2xl font-bold mb-4 text-red-700">Gestion des Enseignants</h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <form method="POST" action="{{ url_for('add_teacher') }}" class="space-y-2 border rounded p-4">
+                    <label class="font-semibold">Ajouter un enseignant</label>
+                    <input type="text" name="teacher_full_name" placeholder="Nom complet" class="w-full p-2 border rounded">
+                    <input type="text" name="teacher_username" placeholder="Nom d'utilisateur" required class="w-full p-2 border rounded">
+                    <input type="password" name="teacher_password" placeholder="Mot de passe" required class="w-full p-2 border rounded">
+                    <select name="teacher_subject_name" class="w-full p-2 border rounded">
+                        <option value="">Toutes les matières (non restreint)</option>
                         {% for matiere in matieres %}
                             <option value="{{ matiere.nom }}">{{ matiere.nom }}</option>
                         {% endfor %}
                     </select>
+                    <button class="bg-red-700 text-white px-4 py-2 rounded hover:bg-red-800">Ajouter</button>
+                </form>
+
+                <div class="border rounded p-4">
+                    <label class="font-semibold block mb-2">Enseignants inscrits</label>
+                    <div class="space-y-2 max-h-64 overflow-y-auto">
+                        {% for teacher in teachers %}
+                            <div class="flex items-center justify-between border rounded p-2">
+                                <div>
+                                    <p class="font-semibold">{{ teacher.full_name or teacher.username }}</p>
+                                    <p class="text-xs text-gray-500">@{{ teacher.username }}</p>
+                                    <p class="text-xs text-gray-500">Matière: {{ teacher.assigned_subject_name or 'Toutes' }}</p>
+                                </div>
+                                <form method="POST" action="{{ url_for('toggle_teacher_status') }}">
+                                    <input type="hidden" name="teacher_id" value="{{ teacher.id }}">
+                                    {% if teacher.is_active %}
+                                        <button class="bg-gray-700 text-white px-3 py-1 rounded text-sm">Désactiver</button>
+                                    {% else %}
+                                        <button class="bg-red-700 text-white px-3 py-1 rounded text-sm">Activer</button>
+                                    {% endif %}
+                                </form>
+                            </div>
+                        {% else %}
+                            <p class="text-gray-500">Aucun enseignant enregistré.</p>
+                        {% endfor %}
+                    </div>
                 </div>
-                <button type="submit" class="button bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
-                    Générer le Rapport
-                </button>
-            </form>
+            </div>
         </div>
 
-        <!-- Section Gestion des Matières et Classes -->
-        <div class="form-container p-6 mb-8">
-            <h2 class="text-2xl font-bold mb-4 text-green-600">Gestion des Matières et Classes</h2>
-
-            <!-- Formulaire pour ajouter une matière -->
-            <div class="mb-6">
-                <h3 class="text-xl font-semibold mb-2 text-purple-600">Ajouter une Matière</h3>
-                <form method="POST" action="{{ url_for('add_matiere') }}" class="space-y-4">
-                    <label for="matiere_name" class="text-gray-700">Nom de la matière :</label>
-                    <input type="text" name="matiere_name" id="matiere_name" required class="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
-                    <button type="submit" class="button bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600">
-                        Ajouter
-                    </button>
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-2xl font-bold mb-4 text-slate-700">Gestion des Matières et Classes</h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <form method="POST" action="{{ url_for('add_matiere') }}" class="space-y-2">
+                    <label class="font-semibold">Ajouter une matière</label>
+                    <input type="text" name="matiere_name" required class="w-full p-2 border rounded">
+                    <button class="bg-green-600 text-white px-4 py-2 rounded">Ajouter</button>
                 </form>
-            </div>
-
-            <!-- Formulaire pour supprimer une matière -->
-            <div class="mb-6">
-                <h3 class="text-xl font-semibold mb-2 text-red-600">Supprimer une Matière</h3>
-                <form method="POST" action="{{ url_for('delete_matiere') }}" class="space-y-4">
-                    <label for="matiere_id" class="text-gray-700">Sélectionnez une matière :</label>
-                    <select name="matiere_id" id="matiere_id" required class="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
-                        {% for matiere in matieres %}
-                            <option value="{{ matiere.id }}">{{ matiere.nom }}</option>
-                        {% endfor %}
+                <form method="POST" action="{{ url_for('delete_matiere') }}" class="space-y-2">
+                    <label class="font-semibold">Supprimer une matière</label>
+                    <select name="matiere_id" required class="w-full p-2 border rounded">
+                        {% for matiere in matieres %}<option value="{{ matiere.id }}">{{ matiere.nom }}</option>{% endfor %}
                     </select>
-                    <button type="submit" class="button bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600">
-                        Supprimer
-                    </button>
+                    <button class="bg-red-600 text-white px-4 py-2 rounded">Supprimer</button>
                 </form>
-            </div>
-
-            <!-- Formulaire pour ajouter une classe -->
-            <div class="mb-6">
-                <h3 class="text-xl font-semibold mb-2 text-purple-600">Ajouter une Classe</h3>
-                <form method="POST" action="{{ url_for('add_classe') }}" class="space-y-4">
-                    <label for="classe_name" class="text-gray-700">Nom de la classe :</label>
-                    <input type="text" name="classe_name" id="classe_name" required class="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
-                    <button type="submit" class="button bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600">
-                        Ajouter
-                    </button>
+                <form method="POST" action="{{ url_for('add_classe') }}" class="space-y-2">
+                    <label class="font-semibold">Ajouter une classe</label>
+                    <input type="text" name="classe_name" required class="w-full p-2 border rounded">
+                    <button class="bg-green-600 text-white px-4 py-2 rounded">Ajouter</button>
                 </form>
-            </div>
-
-            <!-- Formulaire pour supprimer une classe -->
-            <div>
-                <h3 class="text-xl font-semibold mb-2 text-red-600">Supprimer une Classe</h3>
-                <form method="POST" action="{{ url_for('delete_classe') }}" class="space-y-4">
-                    <label for="classe_id" class="text-gray-700">Sélectionnez une classe :</label>
-                    <select name="classe_id" id="classe_id" required class="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
-                        {% for classe in classes %}
-                            <option value="{{ classe.id }}">{{ classe.nom }}</option>
-                        {% endfor %}
+                <form method="POST" action="{{ url_for('delete_classe') }}" class="space-y-2">
+                    <label class="font-semibold">Supprimer une classe</label>
+                    <select name="classe_id" required class="w-full p-2 border rounded">
+                        {% for classe in classes %}<option value="{{ classe.id }}">{{ classe.nom }}</option>{% endfor %}
                     </select>
-                    <button type="submit" class="button bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600">
-                        Supprimer
-                    </button>
+                    <button class="bg-red-600 text-white px-4 py-2 rounded">Supprimer</button>
                 </form>
             </div>
         </div>

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modifier Questionnaire</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
+</head>
+<body class="bg-gray-50 min-h-screen p-6">
+    <div class="max-w-2xl mx-auto bg-white rounded-xl shadow p-6">
+        <h1 class="text-2xl font-bold text-red-700 mb-6">Modifier le questionnaire</h1>
+
+        <form method="POST" class="space-y-4">
+            <div>
+                <label class="block font-semibold mb-1">Titre</label>
+                <input type="text" name="questionnaire_title" value="{{ questionnaire.title }}" required class="w-full p-2 border rounded">
+            </div>
+
+            <div>
+                <label class="block font-semibold mb-1">Description</label>
+                <textarea name="questionnaire_description" rows="4" class="w-full p-2 border rounded">{{ questionnaire.description or '' }}</textarea>
+            </div>
+
+            <label class="inline-flex items-center gap-2 text-sm">
+                <input type="checkbox" name="questionnaire_active" value="1" {% if questionnaire.is_active %}checked{% endif %}>
+                Actif
+            </label>
+
+            <div class="flex items-center gap-3 pt-2">
+                <button class="bg-red-700 text-white px-4 py-2 rounded hover:bg-red-800">Enregistrer</button>
+                <a href="{{ url_for('admin') }}" class="bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300">Annuler</a>
+            </div>
+        </form>
+    </div>
+</body>
+</html>
