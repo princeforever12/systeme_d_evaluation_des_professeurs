@@ -345,14 +345,11 @@ def delete_campaign(campaign_id):
         return redirect(url_for('login'))
 
     campaign = EvaluationCampaign.query.get_or_404(campaign_id)
-    related_tokens = EvaluationToken.query.filter_by(campaign_id=campaign.id).all()
-    for token in related_tokens:
-        token.campaign_id = None
-
+    deleted_tokens_count = EvaluationToken.query.filter_by(campaign_id=campaign.id).delete()
     campaign_name = campaign.name
     db.session.delete(campaign)
     db.session.commit()
-    log_audit('campaign_deleted', f'name={campaign_name}, detached_tokens={len(related_tokens)}')
+    log_audit('campaign_deleted', f'name={campaign_name}, deleted_tokens={deleted_tokens_count}')
     flash(f'Campagne "{campaign_name}" supprimée.', 'success')
     return redirect(url_for('admin'))
 

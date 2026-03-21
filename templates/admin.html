@@ -313,7 +313,7 @@
         </div>
 
         <div class="bg-white rounded-xl shadow p-6">
-            <h2 class="text-2xl font-bold mb-4 text-slate-700">Gestion des Matières et Classes</h2>
+            <h2 class="text-2xl font-bold mb-4 text-slate-700">Gestion des Matières</h2>
             <div class="grid md:grid-cols-2 gap-6">
                 <form method="POST" action="{{ url_for('add_matiere') }}" class="space-y-2">
                     <label class="font-semibold">Ajouter une matière</label>
@@ -324,18 +324,6 @@
                     <label class="font-semibold">Supprimer une matière</label>
                     <select name="matiere_id" required class="w-full p-2 border rounded">
                         {% for matiere in matieres %}<option value="{{ matiere.id }}">{{ matiere.nom }}</option>{% endfor %}
-                    </select>
-                    <button class="bg-red-600 text-white px-4 py-2 rounded">Supprimer</button>
-                </form>
-                <form method="POST" action="{{ url_for('add_classe') }}" class="space-y-2">
-                    <label class="font-semibold">Ajouter une classe</label>
-                    <input type="text" name="classe_name" required class="w-full p-2 border rounded">
-                    <button class="bg-green-600 text-white px-4 py-2 rounded">Ajouter</button>
-                </form>
-                <form method="POST" action="{{ url_for('delete_classe') }}" class="space-y-2">
-                    <label class="font-semibold">Supprimer une classe</label>
-                    <select name="classe_id" required class="w-full p-2 border rounded">
-                        {% for classe in classes %}<option value="{{ classe.id }}">{{ classe.nom }}</option>{% endfor %}
                     </select>
                     <button class="bg-red-600 text-white px-4 py-2 rounded">Supprimer</button>
                 </form>

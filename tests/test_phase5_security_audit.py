@@ -187,9 +187,8 @@ class Phase5SecurityAuditTest(unittest.TestCase):
 
         with app.app_context():
             self.assertIsNone(EvaluationCampaign.query.get(campaign_id))
-            detached_token = EvaluationToken.query.filter_by(token='DELTOKEN11').first()
-            self.assertIsNotNone(detached_token)
-            self.assertIsNone(detached_token.campaign_id)
+            removed_token = EvaluationToken.query.filter_by(token='DELTOKEN11').first()
+            self.assertIsNone(removed_token)
 
     def test_teacher_assigned_subject_only(self):
         with app.app_context():
