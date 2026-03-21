@@ -11,6 +11,7 @@ from app import (
     EvaluationToken,
     ClassQuestion,
     SurveyResponse,
+    ClassQuestionAnswer,
     run_schema_updates,
 )
 
@@ -254,6 +255,49 @@ class Phase5SecurityAuditTest(unittest.TestCase):
         self.assertIn(b'Mati\xc3\xa8re assign\xc3\xa9e', login_resp.data)
         self.assertIn(b'Bases de donnees', login_resp.data)
         self.assertNotIn(b'Algorithmique', login_resp.data)
+
+    def test_admin_can_delete_completed_survey(self):
+        with app.app_context():
+            response = SurveyResponse(
+                filiere_name='I',
+                class_name='L2 I',
+                subject_name='Algorithmique',
+                involvement=0,
+                initial_knowledge=0,
+                current_knowledge=0,
+                professor_motivation=0,
+                tools_methodology=0,
+                examples_exercises=0,
+                explanations_clarity=0,
+                practical_skills='non',
+                course_organization='non',
+                schedule_organization=0,
+                infrastructure_quality=0,
+                overall_satisfaction=0,
+                feedback='to delete',
+            )
+            db.session.add(response)
+            db.session.flush()
+            db.session.add(ClassQuestionAnswer(
+                survey_response_id=response.id,
+                class_name='L2 I',
+                question_text='Q',
+                response_type='text',
+                answer_value='A',
+            ))
+            db.session.commit()
+            response_id = response.id
+
+        with self.client.session_transaction() as sess:
+            sess['admin'] = True
+            sess['username'] = 'admin'
+
+        delete_resp = self.client.post(f'/delete_survey_response/{response_id}', follow_redirects=True)
+        self.assertEqual(delete_resp.status_code, 200)
+
+        with app.app_context():
+            self.assertIsNone(SurveyResponse.query.get(response_id))
+            self.assertEqual(ClassQuestionAnswer.query.filter_by(survey_response_id=response_id).count(), 0)
 
 if __name__ == '__main__':
     unittest.main()

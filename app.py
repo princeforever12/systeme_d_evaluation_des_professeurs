@@ -276,6 +276,7 @@ def admin():
     class_questions = ClassQuestion.query.order_by(ClassQuestion.class_name.asc(), ClassQuestion.created_at.asc()).all()
     campaigns = EvaluationCampaign.query.order_by(EvaluationCampaign.created_at.desc()).all()
     recent_tokens = EvaluationToken.query.order_by(EvaluationToken.created_at.desc()).limit(30).all()
+    recent_survey_responses = SurveyResponse.query.order_by(SurveyResponse.id.desc()).limit(50).all()
 
     return render_template(
         'admin.html',
@@ -287,6 +288,7 @@ def admin():
         filieres=ALL_FILIERES,
         campaigns=campaigns,
         recent_tokens=recent_tokens,
+        recent_survey_responses=recent_survey_responses,
     )
 
 
@@ -746,6 +748,20 @@ def reset_survey_responses():
         db.session.rollback()
         flash(f'Erreur lors de la réinitialisation des résultats : {e}', 'danger')
 
+    return redirect(url_for('admin'))
+
+
+@app.route('/delete_survey_response/<int:response_id>', methods=['POST'])
+def delete_survey_response(response_id):
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    response = SurveyResponse.query.get_or_404(response_id)
+    ClassQuestionAnswer.query.filter_by(survey_response_id=response.id).delete()
+    db.session.delete(response)
+    db.session.commit()
+    log_audit('survey_response_deleted', f'response_id={response_id}')
+    flash('Sondage supprimé avec succès.', 'success')
     return redirect(url_for('admin'))
 
 
