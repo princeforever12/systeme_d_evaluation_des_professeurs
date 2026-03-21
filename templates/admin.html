@@ -90,11 +90,19 @@
                                         <form method="POST" action="{{ url_for('deactivate_campaign', campaign_id=campaign.id) }}">
                                             <button class="bg-gray-700 text-white px-3 py-1 rounded text-sm">Fermer</button>
                                         </form>
+                                        <form method="POST" action="{{ url_for('delete_campaign', campaign_id=campaign.id) }}" onsubmit="return confirm('Supprimer cette campagne ? Les tokens restent disponibles mais détachés de la campagne.');">
+                                            <button class="bg-red-700 text-white px-3 py-1 rounded text-sm">Supprimer</button>
+                                        </form>
                                     </div>
                                 {% else %}
-                                    <form method="POST" action="{{ url_for('activate_campaign', campaign_id=campaign.id) }}">
-                                        <button class="bg-red-500 text-white px-3 py-1 rounded text-sm">Activer</button>
-                                    </form>
+                                    <div class="flex items-center gap-2">
+                                        <form method="POST" action="{{ url_for('activate_campaign', campaign_id=campaign.id) }}">
+                                            <button class="bg-red-500 text-white px-3 py-1 rounded text-sm">Activer</button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('delete_campaign', campaign_id=campaign.id) }}" onsubmit="return confirm('Supprimer cette campagne ? Les tokens restent disponibles mais détachés de la campagne.');">
+                                            <button class="bg-red-700 text-white px-3 py-1 rounded text-sm">Supprimer</button>
+                                        </form>
+                                    </div>
                                 {% endif %}
                             </div>
                         {% else %}
@@ -242,6 +250,12 @@
                     <input type="text" name="teacher_full_name" placeholder="Nom complet" class="w-full p-2 border rounded">
                     <input type="text" name="teacher_username" placeholder="Nom d'utilisateur" required class="w-full p-2 border rounded">
                     <input type="password" name="teacher_password" placeholder="Mot de passe" required class="w-full p-2 border rounded">
+                    <select name="teacher_subject_name" class="w-full p-2 border rounded">
+                        <option value="">Toutes les matières (non restreint)</option>
+                        {% for matiere in matieres %}
+                            <option value="{{ matiere.nom }}">{{ matiere.nom }}</option>
+                        {% endfor %}
+                    </select>
                     <button class="bg-red-700 text-white px-4 py-2 rounded hover:bg-red-800">Ajouter</button>
                 </form>
 
@@ -253,6 +267,7 @@
                                 <div>
                                     <p class="font-semibold">{{ teacher.full_name or teacher.username }}</p>
                                     <p class="text-xs text-gray-500">@{{ teacher.username }}</p>
+                                    <p class="text-xs text-gray-500">Matière: {{ teacher.assigned_subject_name or 'Toutes' }}</p>
                                 </div>
                                 <form method="POST" action="{{ url_for('toggle_teacher_status') }}">
                                     <input type="hidden" name="teacher_id" value="{{ teacher.id }}">

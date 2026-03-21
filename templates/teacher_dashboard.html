@@ -27,12 +27,19 @@
                         <option value="{{ classe.nom }}" {% if selected.classe == classe.nom %}selected{% endif %}>{{ classe.nom }}</option>
                     {% endfor %}
                 </select>
-                <select name="matiere" class="p-2 border rounded">
-                    <option value="">Toutes les matières</option>
-                    {% for matiere in matieres %}
-                        <option value="{{ matiere.nom }}" {% if selected.matiere == matiere.nom %}selected{% endif %}>{{ matiere.nom }}</option>
-                    {% endfor %}
-                </select>
+                {% if teacher_subject_name %}
+                    <input type="hidden" name="matiere" value="{{ teacher_subject_name }}">
+                    <div class="p-2 border rounded bg-red-50 text-red-700 text-sm flex items-center">
+                        Matière assignée : <strong class="ml-1">{{ teacher_subject_name }}</strong>
+                    </div>
+                {% else %}
+                    <select name="matiere" class="p-2 border rounded">
+                        <option value="">Toutes les matières</option>
+                        {% for matiere in matieres %}
+                            <option value="{{ matiere.nom }}" {% if selected.matiere == matiere.nom %}selected{% endif %}>{{ matiere.nom }}</option>
+                        {% endfor %}
+                    </select>
+                {% endif %}
                 <button class="bg-red-700 text-white rounded px-4 py-2">Filtrer</button>
             </form>
         </div>

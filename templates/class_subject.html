@@ -39,7 +39,8 @@
                 <select name="classe" id="classe" required class="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-500">
                     <option value="">Sélectionner une classe</option>
                     {% for classe in classes %}
-                        <option value="{{ classe.id }}">{{ classe.nom }}</option>
+                        {% set cname = classe.nom|lower|replace(' ', '') %}
+                        <option value="{{ classe.id }}" data-is-l1="{{ 'true' if ('l1' in cname or 'licence1' in cname or 'license1' in cname) else 'false' }}">{{ classe.nom }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -73,8 +74,8 @@
         const filiereSelect = document.getElementById('filiere');
 
         function updateFiliereRequirement() {
-            const selectedText = classeSelect.options[classeSelect.selectedIndex]?.text || '';
-            const isL1 = selectedText.trim().toUpperCase().startsWith('L1');
+            const selectedOption = classeSelect.options[classeSelect.selectedIndex];
+            const isL1 = selectedOption?.dataset?.isL1 === 'true';
             filiereSelect.required = !isL1;
             filiereSelect.disabled = isL1;
             if (isL1) {

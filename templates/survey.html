@@ -67,30 +67,6 @@
                 <p>Aucune question n'est encore configurée pour votre classe.</p>
             {% endif %}
 
-
-            {% if class_questions %}
-                <div class="form-group">
-                    <h2 style="font-size:1.1rem; font-weight:600; color:#991b1b; margin-bottom:10px;">Questions spécifiques à votre classe</h2>
-                    {% for question in class_questions %}
-                        <div style="margin-bottom:14px; padding:10px; border:1px solid #fee2e2; border-radius:8px;">
-                            <label style="display:block; margin-bottom:6px; font-weight:500;">{{ question.question_text }}</label>
-                            {% if question.response_type == 'scale' %}
-                                <ul class="choice-list">
-                                    {% for i in range(11) %}
-                                        <li>
-                                            <input type="radio" id="class_question_{{ question.id }}_{{ i }}" name="class_question_{{ question.id }}" value="{{ i }}" style="display:none;">
-                                            <button type="button" class="choice-button" onclick="selectChoice('class_question_{{ question.id }}', 'class_question_{{ question.id }}_{{ i }}')">{{ i }}</button>
-                                        </li>
-                                    {% endfor %}
-                                </ul>
-                            {% else %}
-                                <textarea name="class_question_{{ question.id }}" class="textarea" rows="3" placeholder="Saisissez votre avis ici..."></textarea>
-                            {% endif %}
-                        </div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-
             <div class="form-group">
                 <label for="feedback">Commentaire libre (optionnel)</label>
                 <textarea id="feedback" name="feedback" class="textarea" rows="4" placeholder="Votre avis global..."></textarea>

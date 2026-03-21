@@ -4,6 +4,7 @@ import string
 import csv
 import io
 import os
+import re
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -24,7 +25,10 @@ ALL_FILIERES = [L1_LABEL] + FILIERES_ITER
 
 
 def is_l1_class(class_name):
-    return class_name.strip().upper().startswith('L1')
+    if not class_name:
+        return False
+    normalized = class_name.strip().upper()
+    return bool(re.search(r'\b(L\s*1|LICENCE\s*1|LICENSE\s*1)\b', normalized))
 
 
 # Modèles de base de données
@@ -71,6 +75,7 @@ class Teacher(db.Model):
     username = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     full_name = db.Column(db.String(150), nullable=True)
+    assigned_subject_name = db.Column(db.String(100), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -332,6 +337,24 @@ def deactivate_campaign(campaign_id):
     return redirect(url_for('admin'))
 
 
+@app.route('/delete_campaign/<int:campaign_id>', methods=['POST'])
+def delete_campaign(campaign_id):
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    campaign = EvaluationCampaign.query.get_or_404(campaign_id)
+    related_tokens = EvaluationToken.query.filter_by(campaign_id=campaign.id).all()
+    for token in related_tokens:
+        token.campaign_id = None
+
+    campaign_name = campaign.name
+    db.session.delete(campaign)
+    db.session.commit()
+    log_audit('campaign_deleted', f'name={campaign_name}, detached_tokens={len(related_tokens)}')
+    flash(f'Campagne "{campaign_name}" supprimée.', 'success')
+    return redirect(url_for('admin'))
+
+
 @app.route('/admin/audit', methods=['GET'])
 def admin_audit():
     if not ensure_admin_session():
@@ -434,11 +457,11 @@ def teacher_login():
         if is_db_teacher_valid or is_fallback_teacher_valid:
             session['teacher'] = True
             session['teacher_username'] = username
+            session['teacher_subject_name'] = db_teacher.assigned_subject_name if is_db_teacher_valid else None
             log_audit('teacher_login', f'user={username}')
             flash('Connexion enseignant réussie.', 'success')
             return redirect(url_for('teacher_dashboard'))
         flash('Identifiants enseignant incorrects.', 'danger')
-
     return render_template('teacher_login.html')
 
 
@@ -448,6 +471,7 @@ def teacher_logout():
         log_audit('teacher_logout', f'user={session.get("teacher_username", "enseignant")}')
     session.pop('teacher', None)
     session.pop('teacher_username', None)
+    session.pop('teacher_subject_name', None)
     flash('Vous êtes déconnecté de l\'espace enseignant.', 'success')
     return redirect(url_for('teacher_login'))
 
@@ -459,7 +483,9 @@ def teacher_dashboard():
 
     filiere_name = request.args.get('filiere', '').strip() or None
     classe_name = request.args.get('classe', '').strip() or None
-    subject_name = request.args.get('matiere', '').strip() or None
+    requested_subject_name = request.args.get('matiere', '').strip() or None
+    teacher_subject_name = session.get('teacher_subject_name')
+    subject_name = teacher_subject_name or requested_subject_name
 
     responses = build_dashboard_query(filiere_name, classe_name, subject_name).all()
     total = len(responses)
@@ -486,6 +512,7 @@ def teacher_dashboard():
         filieres=ALL_FILIERES,
         classes=classes,
         matieres=matieres,
+        teacher_subject_name=teacher_subject_name,
         selected={
             'filiere': filiere_name or '',
             'classe': classe_name or '',
@@ -807,6 +834,7 @@ def add_teacher():
     username = request.form.get('teacher_username', '').strip()
     password = request.form.get('teacher_password', '').strip()
     full_name = request.form.get('teacher_full_name', '').strip()
+    assigned_subject_name = request.form.get('teacher_subject_name', '').strip()
 
     if not username or not password:
         flash('Nom d\'utilisateur et mot de passe enseignant requis.', 'danger')
@@ -817,15 +845,20 @@ def add_teacher():
         flash('Ce nom d\'utilisateur enseignant existe déjà.', 'warning')
         return redirect(url_for('admin'))
 
+    if assigned_subject_name and not Matiere.query.filter_by(nom=assigned_subject_name).first():
+        flash('La matière associée à l\'enseignant est invalide.', 'danger')
+        return redirect(url_for('admin'))
+
     teacher = Teacher(
         username=username,
         password_hash=generate_password_hash(password),
         full_name=full_name or None,
+        assigned_subject_name=assigned_subject_name or None,
         is_active=True,
     )
     db.session.add(teacher)
     db.session.commit()
-    log_audit('teacher_added', f'username={username}, full_name={full_name}')
+    log_audit('teacher_added', f'username={username}, full_name={full_name}, subject={assigned_subject_name or "ALL"}')
     flash('Enseignant ajouté avec succès.', 'success')
     return redirect(url_for('admin'))
 
@@ -970,6 +1003,11 @@ def run_schema_updates():
     if 'infrastructure_quality' not in columns:
         db.session.execute(text("ALTER TABLE survey_response ADD COLUMN infrastructure_quality INTEGER DEFAULT 0"))
         db.session.execute(text("UPDATE survey_response SET infrastructure_quality = 0 WHERE infrastructure_quality IS NULL"))
+        db.session.commit()
+
+    teacher_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(teacher)"))}
+    if 'assigned_subject_name' not in teacher_columns:
+        db.session.execute(text("ALTER TABLE teacher ADD COLUMN assigned_subject_name VARCHAR(100)"))
         db.session.commit()
 
 

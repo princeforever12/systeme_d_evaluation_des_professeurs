@@ -1,6 +1,18 @@
 import unittest
 
-from app import app, db, Classe, Matiere, AuditLog, Teacher, EvaluationCampaign, EvaluationToken, ClassQuestion, run_schema_updates
+from app import (
+    app,
+    db,
+    Classe,
+    Matiere,
+    AuditLog,
+    Teacher,
+    EvaluationCampaign,
+    EvaluationToken,
+    ClassQuestion,
+    SurveyResponse,
+    run_schema_updates,
+)
 
 
 class Phase5SecurityAuditTest(unittest.TestCase):
@@ -64,7 +76,8 @@ class Phase5SecurityAuditTest(unittest.TestCase):
         add_resp = self.client.post('/add_teacher', data={
             'teacher_full_name': 'Mme Test',
             'teacher_username': 'mme.test',
-            'teacher_password': 'secret123'
+            'teacher_password': 'secret123',
+            'teacher_subject_name': 'Algorithmique',
         }, follow_redirects=True)
         self.assertEqual(add_resp.status_code, 200)
 
@@ -72,6 +85,7 @@ class Phase5SecurityAuditTest(unittest.TestCase):
             t = Teacher.query.filter_by(username='mme.test').first()
             self.assertIsNotNone(t)
             self.assertTrue(t.is_active)
+            self.assertEqual(t.assigned_subject_name, 'Algorithmique')
 
         login_resp = self.client.post('/teacher/login', data={
             'username': 'mme.test',
@@ -84,18 +98,18 @@ class Phase5SecurityAuditTest(unittest.TestCase):
 
     def test_l1_class_does_not_require_filiere_for_token_validation(self):
         with app.app_context():
-            if not Classe.query.filter_by(nom='L1').first():
-                db.session.add(Classe(nom='L1'))
+            if not Classe.query.filter_by(nom='Licence 1').first():
+                db.session.add(Classe(nom='Licence 1'))
             mat = Matiere.query.first()
             camp = EvaluationCampaign(name='Campagne L1', filiere_name='L1 (sans filière)', is_active=True)
             db.session.add(camp)
             db.session.flush()
-            token = EvaluationToken(token='L1TOKEN0001', filiere_name='L1 (sans filière)', class_name='L1', subject_name=mat.nom, is_used=False, campaign_id=camp.id)
+            token = EvaluationToken(token='L1TOKEN0001', filiere_name='L1 (sans filière)', class_name='Licence 1', subject_name=mat.nom, is_used=False, campaign_id=camp.id)
             db.session.add(token)
             db.session.commit()
 
         with app.app_context():
-            l1_id = Classe.query.filter_by(nom='L1').first().id
+            l1_id = Classe.query.filter_by(nom='Licence 1').first().id
             matiere_id = Matiere.query.first().id
 
         resp = self.client.post('/class_subject', data={
@@ -141,6 +155,105 @@ class Phase5SecurityAuditTest(unittest.TestCase):
         with app.app_context():
             token = EvaluationToken.query.filter_by(token='TOKENTEST22').first()
             self.assertFalse(token.is_used)
+
+    def test_admin_can_delete_campaign(self):
+        with app.app_context():
+            matiere = Matiere.query.first()
+            if not Classe.query.filter_by(nom='L2 IMT').first():
+                db.session.add(Classe(nom='L2 IMT'))
+                db.session.commit()
+            classe = Classe.query.filter_by(nom='L2 IMT').first()
+            campaign = EvaluationCampaign(name='A supprimer', filiere_name='IMT', is_active=False)
+            db.session.add(campaign)
+            db.session.flush()
+            db.session.add(EvaluationToken(
+                token='DELTOKEN11',
+                filiere_name='IMT',
+                class_name=classe.nom,
+                subject_name=matiere.nom,
+                is_used=False,
+                campaign_id=campaign.id,
+            ))
+            db.session.commit()
+            campaign_id = campaign.id
+
+        with self.client.session_transaction() as sess:
+            sess['admin'] = True
+            sess['username'] = 'admin'
+
+        res = self.client.post(f'/delete_campaign/{campaign_id}', follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+
+        with app.app_context():
+            self.assertIsNone(EvaluationCampaign.query.get(campaign_id))
+            detached_token = EvaluationToken.query.filter_by(token='DELTOKEN11').first()
+            self.assertIsNotNone(detached_token)
+            self.assertIsNone(detached_token.campaign_id)
+
+    def test_teacher_assigned_subject_only(self):
+        with app.app_context():
+            if not Matiere.query.filter_by(nom='Bases de donnees').first():
+                db.session.add(Matiere(nom='Bases de donnees'))
+                db.session.commit()
+
+            SurveyResponse.query.delete()
+            db.session.add(SurveyResponse(
+                filiere_name='I',
+                class_name='L2 I',
+                subject_name='Algorithmique',
+                involvement=0,
+                initial_knowledge=0,
+                current_knowledge=0,
+                professor_motivation=0,
+                tools_methodology=0,
+                examples_exercises=0,
+                explanations_clarity=0,
+                practical_skills='non',
+                course_organization='non',
+                schedule_organization=0,
+                infrastructure_quality=0,
+                overall_satisfaction=0,
+                feedback='algo',
+            ))
+            db.session.add(SurveyResponse(
+                filiere_name='I',
+                class_name='L2 I',
+                subject_name='Bases de donnees',
+                involvement=0,
+                initial_knowledge=0,
+                current_knowledge=0,
+                professor_motivation=0,
+                tools_methodology=0,
+                examples_exercises=0,
+                explanations_clarity=0,
+                practical_skills='non',
+                course_organization='non',
+                schedule_organization=0,
+                infrastructure_quality=0,
+                overall_satisfaction=0,
+                feedback='bdd',
+            ))
+            db.session.commit()
+
+        # Recreate account with a real hash through the admin endpoint
+        with self.client.session_transaction() as sess:
+            sess['admin'] = True
+            sess['username'] = 'admin'
+        self.client.post('/add_teacher', data={
+            'teacher_full_name': 'Prof BDD',
+            'teacher_username': 'prof.bdd2',
+            'teacher_password': 'secret123',
+            'teacher_subject_name': 'Bases de donnees',
+        }, follow_redirects=True)
+
+        login_resp = self.client.post('/teacher/login', data={
+            'username': 'prof.bdd2',
+            'password': 'secret123',
+        }, follow_redirects=True)
+        self.assertEqual(login_resp.status_code, 200)
+        self.assertIn(b'Mati\xc3\xa8re assign\xc3\xa9e', login_resp.data)
+        self.assertIn(b'Bases de donnees', login_resp.data)
+        self.assertNotIn(b'Algorithmique', login_resp.data)
 
 if __name__ == '__main__':
     unittest.main()
