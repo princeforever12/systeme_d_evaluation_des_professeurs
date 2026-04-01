@@ -13,6 +13,7 @@ from app import (
     SurveyResponse,
     ClassQuestionAnswer,
     DEFAULT_CLASSES,
+    L1_LABEL,
     run_schema_updates,
 )
 
@@ -304,6 +305,38 @@ class Phase5SecurityAuditTest(unittest.TestCase):
         with app.app_context():
             self.assertIsNone(SurveyResponse.query.get(response_id))
             self.assertEqual(ClassQuestionAnswer.query.filter_by(survey_response_id=response_id).count(), 0)
+
+    def test_class_question_requires_filiere_for_l2_l3(self):
+        with self.client.session_transaction() as sess:
+            sess['admin'] = True
+            sess['username'] = 'admin'
+
+        bad = self.client.post('/add_class_question', data={
+            'class_name': 'L2',
+            'filiere_name': '',
+            'volet_name': 'enseignement',
+            'question_text': 'Question L2',
+            'response_type': 'scale',
+        }, follow_redirects=True)
+        self.assertEqual(bad.status_code, 200)
+
+        with app.app_context():
+            q = ClassQuestion.query.filter_by(question_text='Question L2').first()
+            self.assertIsNone(q)
+
+        ok = self.client.post('/add_class_question', data={
+            'class_name': 'L1',
+            'filiere_name': '',
+            'volet_name': 'enseignement',
+            'question_text': 'Question L1',
+            'response_type': 'scale',
+        }, follow_redirects=True)
+        self.assertEqual(ok.status_code, 200)
+
+        with app.app_context():
+            q_l1 = ClassQuestion.query.filter_by(question_text='Question L1').first()
+            self.assertIsNotNone(q_l1)
+            self.assertEqual(q_l1.filiere_name, L1_LABEL)
 
 if __name__ == '__main__':
     unittest.main()

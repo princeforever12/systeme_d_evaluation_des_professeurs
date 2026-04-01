@@ -100,6 +100,7 @@ class Questionnaire(db.Model):
 class ClassQuestion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     class_name = db.Column(db.String(100), nullable=False)
+    filiere_name = db.Column(db.String(30), nullable=False, default='ALL')
     volet_name = db.Column(db.String(30), nullable=False, default='enseignement')
     question_text = db.Column(db.String(300), nullable=False)
     response_type = db.Column(db.String(20), nullable=False, default='scale')
@@ -215,7 +216,12 @@ def survey():
         flash('Token invalide ou déjà utilisé.', 'danger')
         return redirect(url_for('select'))
 
-    class_questions = ClassQuestion.query.filter_by(class_name=class_name).order_by(ClassQuestion.created_at.asc()).all()
+    query = ClassQuestion.query.filter_by(class_name=class_name)
+    if filiere_name == L1_LABEL:
+        query = query.filter_by(filiere_name=L1_LABEL)
+    else:
+        query = query.filter(ClassQuestion.filiere_name.in_([filiere_name, 'ALL']))
+    class_questions = query.order_by(ClassQuestion.created_at.asc()).all()
     questions_by_volet = {volet: [] for volet in VOLETS}
     for question in class_questions:
         volet = question.volet_name if question.volet_name in VOLETS else 'enseignement'
@@ -935,17 +941,30 @@ def add_class_question():
         return redirect(url_for('login'))
 
     class_name = request.form.get('class_name', '').strip()
+    filiere_name = request.form.get('filiere_name', '').strip()
     volet_name = request.form.get('volet_name', 'enseignement').strip()
     question_text = request.form.get('question_text', '').strip()
     response_type = request.form.get('response_type', 'scale').strip()
+
+    if class_name == 'L1':
+        filiere_name = L1_LABEL
+    elif filiere_name not in FILIERES_ITER:
+        flash('Veuillez sélectionner une filière valide pour les classes L2/L3.', 'danger')
+        return redirect(url_for('admin'))
 
     if not class_name or volet_name not in VOLETS or not question_text or response_type not in {'scale', 'text'}:
         flash('Paramètres invalides pour la question de classe.', 'danger')
         return redirect(url_for('admin'))
 
-    db.session.add(ClassQuestion(class_name=class_name, volet_name=volet_name, question_text=question_text, response_type=response_type))
+    db.session.add(ClassQuestion(
+        class_name=class_name,
+        filiere_name=filiere_name,
+        volet_name=volet_name,
+        question_text=question_text,
+        response_type=response_type,
+    ))
     db.session.commit()
-    log_audit('class_question_added', f'class={class_name}, volet={volet_name}, response_type={response_type}, question={question_text[:80]}')
+    log_audit('class_question_added', f'class={class_name}, filiere={filiere_name}, volet={volet_name}, response_type={response_type}, question={question_text[:80]}')
     flash('Question de classe ajoutée avec succès.', 'success')
     return redirect(url_for('admin'))
 
@@ -1057,6 +1076,12 @@ def run_schema_updates():
     teacher_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(teacher)"))}
     if 'assigned_subject_name' not in teacher_columns:
         db.session.execute(text("ALTER TABLE teacher ADD COLUMN assigned_subject_name VARCHAR(100)"))
+        db.session.commit()
+
+    class_question_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(class_question)"))}
+    if 'filiere_name' not in class_question_columns:
+        db.session.execute(text("ALTER TABLE class_question ADD COLUMN filiere_name VARCHAR(30) DEFAULT 'ALL'"))
+        db.session.execute(text("UPDATE class_question SET filiere_name = 'ALL' WHERE filiere_name IS NULL"))
         db.session.commit()
 
     class_question_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(class_question)"))}
