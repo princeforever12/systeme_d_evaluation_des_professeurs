@@ -218,6 +218,26 @@
                         {% for volet in volets %}
                             <option value="{{ volet }}">{{ volet_labels[volet] }}</option>
                         {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-2xl font-bold mb-4 text-red-700">Questions par classe</h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <form method="POST" action="{{ url_for('add_class_question') }}" class="space-y-3 border rounded p-4">
+                    <label class="font-semibold">Ajouter une question spécifique</label>
+                    <select name="class_name" required class="w-full p-2 border rounded">
+                        <option value="">Classe</option>
+                        {% for classe in classes %}<option value="{{ classe.nom }}">{{ classe.nom }}</option>{% endfor %}
+                    </select>
+                    <textarea name="question_text" rows="3" placeholder="Texte de la question" required class="w-full p-2 border rounded"></textarea>
+                    <select name="response_type" required class="w-full p-2 border rounded">
+                        <option value="scale">Note de 0 à 10</option>
+                        <option value="text">Réponse libre (zone de texte)</option>
                     </select>
                     <textarea name="question_text" rows="3" placeholder="Texte de la question" required class="w-full p-2 border rounded"></textarea>
                     <select name="response_type" required class="w-full p-2 border rounded">
