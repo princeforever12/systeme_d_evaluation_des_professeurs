@@ -12,6 +12,7 @@ from app import (
     ClassQuestion,
     SurveyResponse,
     ClassQuestionAnswer,
+    DEFAULT_CLASSES,
     run_schema_updates,
 )
 
@@ -38,6 +39,12 @@ class Phase5SecurityAuditTest(unittest.TestCase):
         res = self.client.get('/health')
         self.assertEqual(res.status_code, 200)
         self.assertIn(b'"status":"ok"', res.data)
+
+    def test_default_iter_classes_are_available(self):
+        with app.app_context():
+            class_names = {c.nom for c in Classe.query.all()}
+        for expected in DEFAULT_CLASSES:
+            self.assertIn(expected, class_names)
 
     def test_admin_login_writes_audit(self):
         res = self.client.post('/login', data={'username': 'admin', 'password': 'adminpassword'}, follow_redirects=True)

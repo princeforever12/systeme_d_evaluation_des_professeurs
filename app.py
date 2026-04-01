@@ -22,6 +22,7 @@ db = SQLAlchemy(app)
 FILIERES_ITER = ['I', 'IMT', 'EEA']
 L1_LABEL = 'L1 (sans filière)'
 ALL_FILIERES = [L1_LABEL] + FILIERES_ITER
+DEFAULT_CLASSES = ['L1', 'L2 I', 'L2 IMT', 'L2 EEA', 'L3 I', 'L3 IMT', 'L3 EEA']
 
 
 def is_l1_class(class_name):
@@ -160,6 +161,14 @@ def generate_unique_token():
             return token
 
 
+def ensure_default_classes():
+    existing_names = {c.nom for c in Classe.query.all()}
+    missing = [name for name in DEFAULT_CLASSES if name not in existing_names]
+    if missing:
+        db.session.add_all([Classe(nom=name) for name in missing])
+        db.session.commit()
+
+
 def build_dashboard_query(filiere_name=None, classe_name=None, subject_name=None):
     query = SurveyResponse.query
     if filiere_name:
@@ -269,6 +278,7 @@ def admin():
     if not ensure_admin_session():
         return redirect(url_for('login'))
 
+    ensure_default_classes()
     classes = Classe.query.all()
     matieres = Matiere.query.all()
     teachers = Teacher.query.order_by(Teacher.created_at.desc()).all()
@@ -480,6 +490,7 @@ def teacher_dashboard():
     if not ensure_teacher_session():
         return redirect(url_for('teacher_login'))
 
+    ensure_default_classes()
     filiere_name = request.args.get('filiere', '').strip() or None
     classe_name = request.args.get('classe', '').strip() or None
     requested_subject_name = request.args.get('matiere', '').strip() or None
@@ -532,6 +543,7 @@ def logout():
 
 @app.route('/class_subject', methods=['GET', 'POST'])
 def select():
+    ensure_default_classes()
     if request.method == 'POST':
         filiere_name = request.form.get('filiere', '').strip()
         classe_id = request.form.get('classe')
@@ -1028,4 +1040,5 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         run_schema_updates()
+        ensure_default_classes()
         app.run(host='0.0.0.0', port=5000)

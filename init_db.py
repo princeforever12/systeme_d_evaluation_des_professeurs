@@ -7,7 +7,7 @@ def init_db():
         db.create_all()
 
         # Ajouter des données d'exemple
-        classes = ['L2 I', 'L2 IMT', 'L2 EEA', 'L3 I', 'L3 IMT', 'L3 EEA']
+        classes = ['L1', 'L2 I', 'L2 IMT', 'L2 EEA', 'L3 I', 'L3 IMT', 'L3 EEA']
         matieres = ['Algorithmique', 'Bases de Données', 'Réseaux', 'Électronique']
 
         for nom in classes:
