@@ -24,6 +24,13 @@ L1_LABEL = 'L1 (sans filière)'
 ALL_FILIERES = [L1_LABEL] + FILIERES_ITER
 CLASS_LEVELS = ['L1', 'L2', 'L3']
 DEFAULT_CLASSES = CLASS_LEVELS
+VOLETS = ['enseignement', 'enseignant', 'organisation', 'infrastructures']
+VOLET_LABELS = {
+    'enseignement': 'Enseignement',
+    'enseignant': 'Enseignants',
+    'organisation': 'Organisation des cours',
+    'infrastructures': 'Infrastructures pédagogiques',
+}
 
 
 def is_l1_class(class_name):
@@ -93,6 +100,7 @@ class Questionnaire(db.Model):
 class ClassQuestion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     class_name = db.Column(db.String(100), nullable=False)
+    volet_name = db.Column(db.String(30), nullable=False, default='enseignement')
     question_text = db.Column(db.String(300), nullable=False)
     response_type = db.Column(db.String(20), nullable=False, default='scale')
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -208,6 +216,10 @@ def survey():
         return redirect(url_for('select'))
 
     class_questions = ClassQuestion.query.filter_by(class_name=class_name).order_by(ClassQuestion.created_at.asc()).all()
+    questions_by_volet = {volet: [] for volet in VOLETS}
+    for question in class_questions:
+        volet = question.volet_name if question.volet_name in VOLETS else 'enseignement'
+        questions_by_volet[volet].append(question)
 
     if request.method == 'POST':
         feedback = request.form.get('feedback', '').strip()
@@ -271,7 +283,14 @@ def survey():
         flash('Veuillez corriger les erreurs dans le formulaire.', 'danger')
 
     active_questionnaire = Questionnaire.query.filter_by(is_active=True).order_by(Questionnaire.created_at.desc()).first()
-    return render_template('survey.html', active_questionnaire=active_questionnaire, class_questions=class_questions)
+    return render_template(
+        'survey.html',
+        active_questionnaire=active_questionnaire,
+        class_questions=class_questions,
+        volets=VOLETS,
+        volet_labels=VOLET_LABELS,
+        questions_by_volet=questions_by_volet,
+    )
 
 
 @app.route('/admin')
@@ -298,6 +317,8 @@ def admin():
         class_questions=class_questions,
         filieres=ALL_FILIERES,
         class_levels=CLASS_LEVELS,
+        volets=VOLETS,
+        volet_labels=VOLET_LABELS,
         campaigns=campaigns,
         recent_tokens=recent_tokens,
         recent_survey_responses=recent_survey_responses,
@@ -914,16 +935,17 @@ def add_class_question():
         return redirect(url_for('login'))
 
     class_name = request.form.get('class_name', '').strip()
+    volet_name = request.form.get('volet_name', 'enseignement').strip()
     question_text = request.form.get('question_text', '').strip()
     response_type = request.form.get('response_type', 'scale').strip()
 
-    if not class_name or not question_text or response_type not in {'scale', 'text'}:
+    if not class_name or volet_name not in VOLETS or not question_text or response_type not in {'scale', 'text'}:
         flash('Paramètres invalides pour la question de classe.', 'danger')
         return redirect(url_for('admin'))
 
-    db.session.add(ClassQuestion(class_name=class_name, question_text=question_text, response_type=response_type))
+    db.session.add(ClassQuestion(class_name=class_name, volet_name=volet_name, question_text=question_text, response_type=response_type))
     db.session.commit()
-    log_audit('class_question_added', f'class={class_name}, response_type={response_type}, question={question_text[:80]}')
+    log_audit('class_question_added', f'class={class_name}, volet={volet_name}, response_type={response_type}, question={question_text[:80]}')
     flash('Question de classe ajoutée avec succès.', 'success')
     return redirect(url_for('admin'))
 
@@ -1035,6 +1057,12 @@ def run_schema_updates():
     teacher_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(teacher)"))}
     if 'assigned_subject_name' not in teacher_columns:
         db.session.execute(text("ALTER TABLE teacher ADD COLUMN assigned_subject_name VARCHAR(100)"))
+        db.session.commit()
+
+    class_question_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(class_question)"))}
+    if 'volet_name' not in class_question_columns:
+        db.session.execute(text("ALTER TABLE class_question ADD COLUMN volet_name VARCHAR(30) DEFAULT 'enseignement'"))
+        db.session.execute(text("UPDATE class_question SET volet_name = 'enseignement' WHERE volet_name IS NULL"))
         db.session.commit()
 
 
