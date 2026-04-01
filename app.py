@@ -49,6 +49,8 @@ class Classe(db.Model):
 class Matiere(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nom = db.Column(db.String(100), nullable=False)
+    class_name = db.Column(db.String(100), nullable=False, default='ALL')
+    filiere_name = db.Column(db.String(30), nullable=False, default='ALL')
 
 
 class EvaluationCampaign(db.Model):
@@ -825,12 +827,36 @@ def add_matiere():
     if not ensure_admin_session():
         return redirect(url_for('login'))
 
-    matiere_name = request.form.get('matiere_name')
-    if matiere_name:
-        db.session.add(Matiere(nom=matiere_name))
+    matiere_name = request.form.get('matiere_name', '').strip()
+    class_name = request.form.get('class_name', '').strip()
+    filiere_name = request.form.get('filiere_name', '').strip()
+
+    if matiere_name and class_name:
+        if class_name not in CLASS_LEVELS:
+            flash('Veuillez sélectionner une classe valide (L1/L2/L3).', 'danger')
+            return redirect(url_for('admin'))
+
+        if class_name == 'L1':
+            filiere_name = L1_LABEL
+        elif filiere_name not in FILIERES_ITER:
+            flash('Veuillez sélectionner une filière valide pour L2/L3.', 'danger')
+            return redirect(url_for('admin'))
+
+        existing = Matiere.query.filter_by(
+            nom=matiere_name,
+            class_name=class_name,
+            filiere_name=filiere_name,
+        ).first()
+        if existing:
+            flash('Cette matière existe déjà pour cette classe/filière.', 'warning')
+            return redirect(url_for('admin'))
+
+        db.session.add(Matiere(nom=matiere_name, class_name=class_name, filiere_name=filiere_name))
         db.session.commit()
-        log_audit('matiere_added', f'nom={matiere_name}')
+        log_audit('matiere_added', f'nom={matiere_name}, classe={class_name}, filiere={filiere_name}')
         flash('Matière ajoutée avec succès.', 'success')
+    else:
+        flash('Le nom de la matière et la classe sont requis.', 'danger')
     return redirect(url_for('admin'))
 
 
@@ -845,7 +871,10 @@ def delete_matiere():
         if matiere_to_delete:
             db.session.delete(matiere_to_delete)
             db.session.commit()
-            log_audit('matiere_deleted', f'nom={matiere_to_delete.nom}')
+            log_audit(
+                'matiere_deleted',
+                f'nom={matiere_to_delete.nom}, classe={matiere_to_delete.class_name}, filiere={matiere_to_delete.filiere_name}'
+            )
             flash('Matière supprimée avec succès.', 'success')
     return redirect(url_for('admin'))
 
@@ -1088,6 +1117,18 @@ def run_schema_updates():
     if 'volet_name' not in class_question_columns:
         db.session.execute(text("ALTER TABLE class_question ADD COLUMN volet_name VARCHAR(30) DEFAULT 'enseignement'"))
         db.session.execute(text("UPDATE class_question SET volet_name = 'enseignement' WHERE volet_name IS NULL"))
+        db.session.commit()
+
+    matiere_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(matiere)"))}
+    if 'class_name' not in matiere_columns:
+        db.session.execute(text("ALTER TABLE matiere ADD COLUMN class_name VARCHAR(100) DEFAULT 'ALL'"))
+        db.session.execute(text("UPDATE matiere SET class_name = 'ALL' WHERE class_name IS NULL"))
+        db.session.commit()
+
+    matiere_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(matiere)"))}
+    if 'filiere_name' not in matiere_columns:
+        db.session.execute(text("ALTER TABLE matiere ADD COLUMN filiere_name VARCHAR(30) DEFAULT 'ALL'"))
+        db.session.execute(text("UPDATE matiere SET filiere_name = 'ALL' WHERE filiere_name IS NULL"))
         db.session.commit()
 
 
