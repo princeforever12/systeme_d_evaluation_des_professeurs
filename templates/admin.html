@@ -209,7 +209,7 @@
             <div class="grid md:grid-cols-2 gap-6">
                 <form method="POST" action="{{ url_for('add_class_question') }}" class="space-y-3 border rounded p-4">
                     <label class="font-semibold">Ajouter une question spécifique</label>
-                    <select name="class_name" required class="w-full p-2 border rounded">
+                    <select name="class_name" id="question_class_name" required class="w-full p-2 border rounded">
                         <option value="">Classe</option>
                         {% for classe in classes %}<option value="{{ classe.nom }}">{{ classe.nom }}</option>{% endfor %}
                     </select>
@@ -226,21 +226,6 @@
                         {% for volet in volets %}
                             <option value="{{ volet }}">{{ volet_labels[volet] }}</option>
                         {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-
-
-        <div class="bg-white rounded-xl shadow p-6">
-            <h2 class="text-2xl font-bold mb-4 text-red-700">Questions par classe</h2>
-            <div class="grid md:grid-cols-2 gap-6">
-                <form method="POST" action="{{ url_for('add_class_question') }}" class="space-y-3 border rounded p-4">
-                    <label class="font-semibold">Ajouter une question spécifique</label>
-                    <select name="class_name" required class="w-full p-2 border rounded">
-                        <option value="">Classe</option>
-                        {% for classe in classes %}<option value="{{ classe.nom }}">{{ classe.nom }}</option>{% endfor %}
                     </select>
                     <textarea name="question_text" rows="3" placeholder="Texte de la question" required class="w-full p-2 border rounded"></textarea>
                     <select name="response_type" required class="w-full p-2 border rounded">
@@ -346,13 +331,29 @@
             <div class="grid md:grid-cols-2 gap-6">
                 <form method="POST" action="{{ url_for('add_matiere') }}" class="space-y-2">
                     <label class="font-semibold">Ajouter une matière</label>
+                    <select name="class_name" id="subject_class_name" required class="w-full p-2 border rounded">
+                        <option value="">Classe</option>
+                        {% for classe in classes %}<option value="{{ classe.nom }}">{{ classe.nom }}</option>{% endfor %}
+                    </select>
+                    <select name="filiere_name" id="subject_filiere_name" class="w-full p-2 border rounded">
+                        <option value="">Filière (obligatoire pour L2/L3)</option>
+                        {% for filiere in filieres %}
+                            {% if filiere != 'L1 (sans filière)' %}
+                                <option value="{{ filiere }}">{{ filiere }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
                     <input type="text" name="matiere_name" required class="w-full p-2 border rounded">
                     <button class="bg-green-600 text-white px-4 py-2 rounded">Ajouter</button>
                 </form>
                 <form method="POST" action="{{ url_for('delete_matiere') }}" class="space-y-2">
                     <label class="font-semibold">Supprimer une matière</label>
                     <select name="matiere_id" required class="w-full p-2 border rounded">
-                        {% for matiere in matieres %}<option value="{{ matiere.id }}">{{ matiere.nom }}</option>{% endfor %}
+                        {% for matiere in matieres %}
+                            <option value="{{ matiere.id }}">
+                                {{ matiere.nom }} — {{ matiere.class_name }} / {{ matiere.filiere_name }}
+                            </option>
+                        {% endfor %}
                     </select>
                     <button class="bg-red-600 text-white px-4 py-2 rounded">Supprimer</button>
                 </form>
@@ -360,8 +361,10 @@
         </div>
     </div>
 <script>
-    const questionClassSelect = document.querySelector('select[name="class_name"]');
+    const questionClassSelect = document.getElementById('question_class_name');
     const questionFiliereSelect = document.getElementById('question_filiere_name');
+    const subjectClassSelect = document.getElementById('subject_class_name');
+    const subjectFiliereSelect = document.getElementById('subject_filiere_name');
 
     function updateQuestionFiliereRequirement() {
         if (!questionClassSelect || !questionFiliereSelect) return;
@@ -375,6 +378,20 @@
     if (questionClassSelect && questionFiliereSelect) {
         questionClassSelect.addEventListener('change', updateQuestionFiliereRequirement);
         updateQuestionFiliereRequirement();
+    }
+
+    function updateSubjectFiliereRequirement() {
+        if (!subjectClassSelect || !subjectFiliereSelect) return;
+        const selectedClass = subjectClassSelect.value;
+        const isL1 = selectedClass === 'L1';
+        subjectFiliereSelect.required = !isL1;
+        subjectFiliereSelect.disabled = isL1;
+        if (isL1) subjectFiliereSelect.value = '';
+    }
+
+    if (subjectClassSelect && subjectFiliereSelect) {
+        subjectClassSelect.addEventListener('change', updateSubjectFiliereRequirement);
+        updateSubjectFiliereRequirement();
     }
 </script>
 </body>
