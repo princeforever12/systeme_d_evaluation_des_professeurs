@@ -27,7 +27,7 @@ class Phase5SecurityAuditTest(unittest.TestCase):
             db.create_all()
             run_schema_updates()
             if not Classe.query.first():
-                db.session.add(Classe(nom='L2 I'))
+                db.session.add(Classe(nom='L2'))
             if not Matiere.query.first():
                 db.session.add(Matiere(nom='Algorithmique'))
             db.session.commit()
@@ -131,9 +131,9 @@ class Phase5SecurityAuditTest(unittest.TestCase):
 
     def test_class_specific_text_question_is_required(self):
         with app.app_context():
-            classe = Classe.query.filter_by(nom='L2 I').first()
+            classe = Classe.query.filter_by(nom='L2').first()
             mat = Matiere.query.first()
-            q = ClassQuestion(class_name='L2 I', question_text='Que faut-il améliorer ?', response_type='text')
+            q = ClassQuestion(class_name='L2', question_text='Que faut-il améliorer ?', response_type='text')
             camp = EvaluationCampaign(name='Campagne L2', filiere_name='I', is_active=True)
             db.session.add_all([q, camp])
             db.session.flush()
@@ -144,11 +144,11 @@ class Phase5SecurityAuditTest(unittest.TestCase):
         with app.app_context():
             subject_name = Matiere.query.first().nom
             token_id = EvaluationToken.query.filter_by(token='TOKENTEST22').first().id
-            class_question_id = ClassQuestion.query.filter_by(class_name='L2 I').first().id
+            class_question_id = ClassQuestion.query.filter_by(class_name='L2').first().id
 
         with self.client.session_transaction() as sess:
             sess['filiere_name'] = 'I'
-            sess['class_name'] = 'L2 I'
+            sess['class_name'] = 'L2'
             sess['subject_name'] = subject_name
             sess['token_id'] = token_id
 
@@ -167,10 +167,10 @@ class Phase5SecurityAuditTest(unittest.TestCase):
     def test_admin_can_delete_campaign(self):
         with app.app_context():
             matiere = Matiere.query.first()
-            if not Classe.query.filter_by(nom='L2 IMT').first():
-                db.session.add(Classe(nom='L2 IMT'))
+            if not Classe.query.filter_by(nom='L2').first():
+                db.session.add(Classe(nom='L2'))
                 db.session.commit()
-            classe = Classe.query.filter_by(nom='L2 IMT').first()
+            classe = Classe.query.filter_by(nom='L2').first()
             campaign = EvaluationCampaign(name='A supprimer', filiere_name='IMT', is_active=False)
             db.session.add(campaign)
             db.session.flush()
@@ -206,7 +206,7 @@ class Phase5SecurityAuditTest(unittest.TestCase):
             SurveyResponse.query.delete()
             db.session.add(SurveyResponse(
                 filiere_name='I',
-                class_name='L2 I',
+                class_name='L2',
                 subject_name='Algorithmique',
                 involvement=0,
                 initial_knowledge=0,
@@ -224,7 +224,7 @@ class Phase5SecurityAuditTest(unittest.TestCase):
             ))
             db.session.add(SurveyResponse(
                 filiere_name='I',
-                class_name='L2 I',
+                class_name='L2',
                 subject_name='Bases de donnees',
                 involvement=0,
                 initial_knowledge=0,
@@ -266,7 +266,7 @@ class Phase5SecurityAuditTest(unittest.TestCase):
         with app.app_context():
             response = SurveyResponse(
                 filiere_name='I',
-                class_name='L2 I',
+                class_name='L2',
                 subject_name='Algorithmique',
                 involvement=0,
                 initial_knowledge=0,
@@ -286,7 +286,7 @@ class Phase5SecurityAuditTest(unittest.TestCase):
             db.session.flush()
             db.session.add(ClassQuestionAnswer(
                 survey_response_id=response.id,
-                class_name='L2 I',
+                class_name='L2',
                 question_text='Q',
                 response_type='text',
                 answer_value='A',

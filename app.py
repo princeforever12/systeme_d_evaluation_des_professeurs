@@ -22,7 +22,8 @@ db = SQLAlchemy(app)
 FILIERES_ITER = ['I', 'IMT', 'EEA']
 L1_LABEL = 'L1 (sans filière)'
 ALL_FILIERES = [L1_LABEL] + FILIERES_ITER
-DEFAULT_CLASSES = ['L1', 'L2 I', 'L2 IMT', 'L2 EEA', 'L3 I', 'L3 IMT', 'L3 EEA']
+CLASS_LEVELS = ['L1', 'L2', 'L3']
+DEFAULT_CLASSES = CLASS_LEVELS
 
 
 def is_l1_class(class_name):
@@ -279,7 +280,7 @@ def admin():
         return redirect(url_for('login'))
 
     ensure_default_classes()
-    classes = Classe.query.all()
+    classes = Classe.query.filter(Classe.nom.in_(CLASS_LEVELS)).order_by(Classe.nom.asc()).all()
     matieres = Matiere.query.all()
     teachers = Teacher.query.order_by(Teacher.created_at.desc()).all()
     questionnaires = Questionnaire.query.order_by(Questionnaire.created_at.desc()).all()
@@ -296,6 +297,7 @@ def admin():
         questionnaires=questionnaires,
         class_questions=class_questions,
         filieres=ALL_FILIERES,
+        class_levels=CLASS_LEVELS,
         campaigns=campaigns,
         recent_tokens=recent_tokens,
         recent_survey_responses=recent_survey_responses,
@@ -513,7 +515,7 @@ def teacher_dashboard():
         'infrastructure': round(sum(r.infrastructure_quality for r in responses) / total, 2) if total else 0,
     }
 
-    classes = Classe.query.all()
+    classes = Classe.query.filter(Classe.nom.in_(CLASS_LEVELS)).order_by(Classe.nom.asc()).all()
     matieres = Matiere.query.all()
     return render_template(
         'teacher_dashboard.html',
@@ -589,7 +591,7 @@ def select():
 
         flash('Veuillez sélectionner une classe, une matière et saisir un token.', 'danger')
 
-    classes = Classe.query.all()
+    classes = Classe.query.filter(Classe.nom.in_(CLASS_LEVELS)).order_by(Classe.nom.asc()).all()
     matieres = Matiere.query.all()
     return render_template('class_subject.html', classes=classes, matieres=matieres, filieres=ALL_FILIERES)
 
