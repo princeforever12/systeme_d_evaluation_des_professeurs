@@ -15,16 +15,16 @@
 
         <div class="bg-white p-6 rounded-lg shadow mb-6">
             <form method="GET" action="{{ url_for('teacher_dashboard') }}" class="grid md:grid-cols-4 gap-4">
-                <select name="filiere" class="p-2 border rounded">
-                    <option value="">Toutes les filières</option>
-                    {% for filiere in filieres %}
-                        <option value="{{ filiere }}" {% if selected.filiere == filiere %}selected{% endif %}>{{ filiere }}</option>
-                    {% endfor %}
-                </select>
-                <select name="classe" class="p-2 border rounded">
+                <select name="classe" id="teacher_class" class="p-2 border rounded">
                     <option value="">Toutes les classes</option>
                     {% for classe in classes %}
                         <option value="{{ classe.nom }}" {% if selected.classe == classe.nom %}selected{% endif %}>{{ classe.nom }}</option>
+                    {% endfor %}
+                </select>
+                <select name="filiere" id="teacher_filiere" class="p-2 border rounded">
+                    <option value="">Toutes les filières</option>
+                    {% for filiere in filieres %}
+                        <option value="{{ filiere }}" {% if selected.filiere == filiere %}selected{% endif %}>{{ filiere }}</option>
                     {% endfor %}
                 </select>
                 {% if teacher_subject_name %}
@@ -33,10 +33,17 @@
                         Matière assignée : <strong class="ml-1">{{ teacher_subject_name }}</strong>
                     </div>
                 {% else %}
-                    <select name="matiere" class="p-2 border rounded">
+                    <select name="matiere" id="teacher_matiere" class="p-2 border rounded">
                         <option value="">Toutes les matières</option>
                         {% for matiere in matieres %}
-                            <option value="{{ matiere.nom }}" {% if selected.matiere == matiere.nom %}selected{% endif %}>{{ matiere.nom }}</option>
+                            <option
+                                value="{{ matiere.nom }}"
+                                data-class-name="{{ matiere.class_name }}"
+                                data-filiere-name="{{ matiere.filiere_name }}"
+                                {% if selected.matiere == matiere.nom %}selected{% endif %}
+                            >
+                                {{ matiere.nom }}
+                            </option>
                         {% endfor %}
                     </select>
                 {% endif %}
@@ -65,5 +72,43 @@
             {% endif %}
         </div>
     </div>
+    <script>
+        const teacherClassSelect = document.getElementById('teacher_class');
+        const teacherFiliereSelect = document.getElementById('teacher_filiere');
+        const teacherMatiereSelect = document.getElementById('teacher_matiere');
+
+        function updateTeacherFilters() {
+            if (!teacherClassSelect || !teacherFiliereSelect || !teacherMatiereSelect) return;
+            const selectedClass = teacherClassSelect.value;
+            const isL1 = selectedClass === 'L1';
+
+            for (const option of teacherFiliereSelect.options) {
+                if (!option.value) continue;
+                option.hidden = isL1 ? option.value !== 'L1 (sans filière)' : option.value === 'L1 (sans filière)';
+            }
+            if (isL1) {
+                teacherFiliereSelect.value = 'L1 (sans filière)';
+            } else if (teacherFiliereSelect.value === 'L1 (sans filière)') {
+                teacherFiliereSelect.value = '';
+            }
+
+            const selectedFiliere = teacherFiliereSelect.value;
+            const visibleValues = [];
+            for (const option of teacherMatiereSelect.options) {
+                if (!option.value) continue;
+                const classMatch = !selectedClass || option.dataset.className === selectedClass || option.dataset.className === 'ALL';
+                const filiereMatch = !selectedFiliere || option.dataset.filiereName === selectedFiliere || option.dataset.filiereName === 'Tronc commun' || option.dataset.filiereName === 'ALL';
+                option.hidden = !(classMatch && filiereMatch);
+                if (!option.hidden) visibleValues.push(option.value);
+            }
+            if (!visibleValues.includes(teacherMatiereSelect.value)) {
+                teacherMatiereSelect.value = '';
+            }
+        }
+
+        teacherClassSelect?.addEventListener('change', updateTeacherFilters);
+        teacherFiliereSelect?.addEventListener('change', updateTeacherFilters);
+        updateTeacherFilters();
+    </script>
 </body>
 </html>
