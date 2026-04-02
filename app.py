@@ -233,9 +233,9 @@ def survey():
 
     query = ClassQuestion.query.filter_by(class_name=class_name)
     if filiere_name == L1_LABEL:
-        query = query.filter_by(filiere_name=L1_LABEL)
+        query = query.filter(ClassQuestion.filiere_name.in_([L1_LABEL, 'ALL']))
     else:
-        query = query.filter(ClassQuestion.filiere_name.in_([filiere_name, 'ALL']))
+        query = query.filter(ClassQuestion.filiere_name.in_([filiere_name, TRONC_COMMUN_LABEL, 'ALL']))
     class_questions = query.order_by(ClassQuestion.created_at.asc()).all()
     questions_by_volet = {volet: [] for volet in VOLETS}
     for question in class_questions:
@@ -1001,10 +1001,9 @@ def add_class_question():
     question_text = request.form.get('question_text', '').strip()
     response_type = request.form.get('response_type', 'scale').strip()
 
-    if class_name == 'L1':
-        filiere_name = L1_LABEL
-    elif filiere_name not in FILIERES_ITER:
-        flash('Veuillez sélectionner une filière valide pour les classes L2/L3.', 'danger')
+    normalized_filiere = normalize_filiere_for_class(class_name, filiere_name)
+    if not normalized_filiere:
+        flash('Veuillez sélectionner une filière valide pour cette classe.', 'danger')
         return redirect(url_for('admin'))
 
     if not class_name or volet_name not in VOLETS or not question_text or response_type not in {'scale', 'text'}:
@@ -1013,13 +1012,13 @@ def add_class_question():
 
     db.session.add(ClassQuestion(
         class_name=class_name,
-        filiere_name=filiere_name,
+        filiere_name=normalized_filiere,
         volet_name=volet_name,
         question_text=question_text,
         response_type=response_type,
     ))
     db.session.commit()
-    log_audit('class_question_added', f'class={class_name}, filiere={filiere_name}, volet={volet_name}, response_type={response_type}, question={question_text[:80]}')
+    log_audit('class_question_added', f'class={class_name}, filiere={normalized_filiere}, volet={volet_name}, response_type={response_type}, question={question_text[:80]}')
     flash('Question de classe ajoutée avec succès.', 'success')
     return redirect(url_for('admin'))
 
