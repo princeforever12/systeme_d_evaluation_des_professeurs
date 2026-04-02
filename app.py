@@ -659,9 +659,13 @@ def result():
 
 @app.route('/report', methods=['GET', 'POST'])
 def generate_report():
-    filiere_name = request.form.get('filiere')
-    classe_name = request.form.get('classe')
-    matiere_name = request.form.get('matiere')
+    classe_name = request.form.get('classe', '').strip()
+    matiere_name = request.form.get('matiere', '').strip()
+    filiere_name = normalize_filiere_for_class(classe_name, request.form.get('filiere', '').strip())
+
+    if not classe_name or not matiere_name or not filiere_name:
+        flash('Veuillez sélectionner une classe, une filière valide et une matière.', 'warning')
+        return redirect(url_for('admin'))
 
     responses = SurveyResponse.query.filter_by(
         filiere_name=filiere_name,
