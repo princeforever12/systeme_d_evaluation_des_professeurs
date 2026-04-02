@@ -21,7 +21,9 @@ db = SQLAlchemy(app)
 
 FILIERES_ITER = ['I', 'IMT', 'EEA']
 L1_LABEL = 'L1 (sans filière)'
-ALL_FILIERES = [L1_LABEL] + FILIERES_ITER
+TRONC_COMMUN_LABEL = 'Tronc commun'
+CAMPAIGN_GLOBAL_LABEL = 'ALL'
+ALL_FILIERES = [L1_LABEL, TRONC_COMMUN_LABEL] + FILIERES_ITER
 CLASS_LEVELS = ['L1', 'L2', 'L3']
 DEFAULT_CLASSES = CLASS_LEVELS
 VOLETS = ['enseignement', 'enseignant', 'organisation', 'infrastructures']
@@ -40,6 +42,17 @@ def is_l1_class(class_name):
     return bool(re.search(r'\b(L\s*1|LICENCE\s*1|LICENSE\s*1)\b', normalized))
 
 
+def normalize_filiere_for_class(class_name, filiere_name):
+    class_name = (class_name or '').strip()
+    filiere_name = (filiere_name or '').strip()
+
+    if is_l1_class(class_name):
+        return L1_LABEL
+    if filiere_name in FILIERES_ITER or filiere_name == TRONC_COMMUN_LABEL:
+        return filiere_name
+    return None
+
+
 # Modèles de base de données
 class Classe(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -49,6 +62,8 @@ class Classe(db.Model):
 class Matiere(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nom = db.Column(db.String(100), nullable=False)
+    class_name = db.Column(db.String(100), nullable=False, default='ALL')
+    filiere_name = db.Column(db.String(30), nullable=False, default='ALL')
 
 
 class EvaluationCampaign(db.Model):
@@ -218,9 +233,9 @@ def survey():
 
     query = ClassQuestion.query.filter_by(class_name=class_name)
     if filiere_name == L1_LABEL:
-        query = query.filter_by(filiere_name=L1_LABEL)
+        query = query.filter(ClassQuestion.filiere_name.in_([L1_LABEL, 'ALL']))
     else:
-        query = query.filter(ClassQuestion.filiere_name.in_([filiere_name, 'ALL']))
+        query = query.filter(ClassQuestion.filiere_name.in_([filiere_name, TRONC_COMMUN_LABEL, 'ALL']))
     class_questions = query.order_by(ClassQuestion.created_at.asc()).all()
     questions_by_volet = {volet: [] for volet in VOLETS}
     for question in class_questions:
@@ -337,15 +352,14 @@ def create_campaign():
         return redirect(url_for('login'))
 
     name = request.form.get('campaign_name', '').strip()
-    filiere = request.form.get('filiere', '').strip()
-    if not name or filiere not in ALL_FILIERES:
-        flash('Nom de campagne ou filière invalide.', 'danger')
+    if not name:
+        flash('Nom de campagne invalide.', 'danger')
         return redirect(url_for('admin'))
 
-    campaign = EvaluationCampaign(name=name, filiere_name=filiere, is_active=False)
+    campaign = EvaluationCampaign(name=name, filiere_name=CAMPAIGN_GLOBAL_LABEL, is_active=False)
     db.session.add(campaign)
     db.session.commit()
-    log_audit('campaign_created', f'name={name}, filiere={filiere}')
+    log_audit('campaign_created', f'name={name}')
     flash('Campagne créée avec succès.', 'success')
     return redirect(url_for('admin'))
 
@@ -356,11 +370,11 @@ def activate_campaign(campaign_id):
         return redirect(url_for('login'))
 
     campaign = EvaluationCampaign.query.get_or_404(campaign_id)
-    EvaluationCampaign.query.filter_by(filiere_name=campaign.filiere_name, is_active=True).update({'is_active': False})
+    EvaluationCampaign.query.filter_by(is_active=True).update({'is_active': False})
     campaign.is_active = True
     db.session.commit()
-    log_audit('campaign_activated', f'name={campaign.name}, filiere={campaign.filiere_name}')
-    flash(f'Campagne "{campaign.name}" activée pour la filière {campaign.filiere_name}.', 'success')
+    log_audit('campaign_activated', f'name={campaign.name}')
+    flash(f'Campagne "{campaign.name}" activée.', 'success')
     return redirect(url_for('admin'))
 
 
@@ -413,7 +427,8 @@ def generate_tokens():
     campaign_id = request.form.get('campaign_id', type=int)
     count = request.form.get('count', type=int)
 
-    if filiere not in ALL_FILIERES or not classe_name or not subject_name:
+    normalized_filiere = normalize_filiere_for_class(classe_name, filiere)
+    if not normalized_filiere or not classe_name or not subject_name:
         flash('Paramètres de génération invalides.', 'danger')
         return redirect(url_for('admin'))
 
@@ -422,15 +437,22 @@ def generate_tokens():
         return redirect(url_for('admin'))
 
     campaign = EvaluationCampaign.query.get(campaign_id) if campaign_id else None
-    if not campaign or campaign.filiere_name != filiere:
-        flash('Campagne invalide pour la filière sélectionnée.', 'danger')
+    if not campaign:
+        flash('Campagne invalide.', 'danger')
+        return redirect(url_for('admin'))
+
+    subject = Matiere.query.filter_by(nom=subject_name, class_name=classe_name).filter(
+        Matiere.filiere_name.in_([normalized_filiere, TRONC_COMMUN_LABEL, 'ALL'])
+    ).first()
+    if not subject:
+        flash('La matière sélectionnée ne correspond pas à la classe/filière choisie.', 'danger')
         return redirect(url_for('admin'))
 
     created = 0
     for _ in range(count):
         db.session.add(EvaluationToken(
             token=generate_unique_token(),
-            filiere_name=filiere,
+            filiere_name=normalized_filiere,
             class_name=classe_name,
             subject_name=subject_name,
             campaign_id=campaign.id,
@@ -439,8 +461,8 @@ def generate_tokens():
         created += 1
 
     db.session.commit()
-    log_audit('tokens_generated', f'count={created}, filiere={filiere}, classe={classe_name}, matiere={subject_name}')
-    flash(f'{created} tokens générés pour {filiere} / {classe_name} / {subject_name}.', 'success')
+    log_audit('tokens_generated', f'count={created}, filiere={normalized_filiere}, classe={classe_name}, matiere={subject_name}')
+    flash(f'{created} tokens générés pour {normalized_filiere} / {classe_name} / {subject_name}.', 'success')
     return redirect(url_for('admin'))
 
 
@@ -586,15 +608,22 @@ def select():
                 flash('Classe ou matière invalide.', 'danger')
                 return redirect(url_for('select'))
 
-            if is_l1_class(classe.nom):
-                filiere_name = L1_LABEL
-            elif filiere_name not in FILIERES_ITER:
-                flash('Veuillez sélectionner une filière valide pour les classes de L2 et plus.', 'danger')
+            normalized_filiere = normalize_filiere_for_class(classe.nom, filiere_name)
+            if not normalized_filiere:
+                flash('Veuillez sélectionner une filière valide pour cette classe.', 'danger')
+                return redirect(url_for('select'))
+
+            if matiere.class_name not in ('ALL', classe.nom):
+                flash('La matière ne correspond pas à la classe sélectionnée.', 'danger')
+                return redirect(url_for('select'))
+
+            if matiere.filiere_name not in ('ALL', normalized_filiere, TRONC_COMMUN_LABEL):
+                flash('La matière ne correspond pas à la filière sélectionnée.', 'danger')
                 return redirect(url_for('select'))
 
             token_obj = EvaluationToken.query.filter_by(
                 token=access_token,
-                filiere_name=filiere_name,
+                filiere_name=normalized_filiere,
                 class_name=classe.nom,
                 subject_name=matiere.nom,
                 is_used=False,
@@ -609,17 +638,17 @@ def select():
                 flash('La campagne associée au token est fermée.', 'danger')
                 return redirect(url_for('select'))
 
-            session['filiere_name'] = filiere_name
+            session['filiere_name'] = normalized_filiere
             session['class_name'] = classe.nom
             session['subject_name'] = matiere.nom
             session['token_id'] = token_obj.id
-            log_audit('token_validated', f'token={access_token}, filiere={filiere_name}, classe={classe.nom}, matiere={matiere.nom}')
+            log_audit('token_validated', f'token={access_token}, filiere={normalized_filiere}, classe={classe.nom}, matiere={matiere.nom}')
             return redirect(url_for('survey'))
 
         flash('Veuillez sélectionner une classe, une matière et saisir un token.', 'danger')
 
     classes = Classe.query.filter(Classe.nom.in_(CLASS_LEVELS)).order_by(Classe.nom.asc()).all()
-    matieres = Matiere.query.all()
+    matieres = Matiere.query.order_by(Matiere.nom.asc()).all()
     return render_template('class_subject.html', classes=classes, matieres=matieres, filieres=ALL_FILIERES)
 
 
@@ -630,9 +659,13 @@ def result():
 
 @app.route('/report', methods=['GET', 'POST'])
 def generate_report():
-    filiere_name = request.form.get('filiere')
-    classe_name = request.form.get('classe')
-    matiere_name = request.form.get('matiere')
+    classe_name = request.form.get('classe', '').strip()
+    matiere_name = request.form.get('matiere', '').strip()
+    filiere_name = normalize_filiere_for_class(classe_name, request.form.get('filiere', '').strip())
+
+    if not classe_name or not matiere_name or not filiere_name:
+        flash('Veuillez sélectionner une classe, une filière valide et une matière.', 'warning')
+        return redirect(url_for('admin'))
 
     responses = SurveyResponse.query.filter_by(
         filiere_name=filiere_name,
@@ -825,12 +858,35 @@ def add_matiere():
     if not ensure_admin_session():
         return redirect(url_for('login'))
 
-    matiere_name = request.form.get('matiere_name')
-    if matiere_name:
-        db.session.add(Matiere(nom=matiere_name))
+    matiere_name = request.form.get('matiere_name', '').strip()
+    class_name = request.form.get('class_name', '').strip()
+    filiere_name = request.form.get('filiere_name', '').strip()
+
+    if matiere_name and class_name:
+        if class_name not in CLASS_LEVELS:
+            flash('Veuillez sélectionner une classe valide (L1/L2/L3).', 'danger')
+            return redirect(url_for('admin'))
+
+        normalized_filiere = normalize_filiere_for_class(class_name, filiere_name)
+        if not normalized_filiere:
+            flash('Veuillez sélectionner une filière valide pour cette classe.', 'danger')
+            return redirect(url_for('admin'))
+
+        existing = Matiere.query.filter_by(
+            nom=matiere_name,
+            class_name=class_name,
+            filiere_name=normalized_filiere,
+        ).first()
+        if existing:
+            flash('Cette matière existe déjà pour cette classe/filière.', 'warning')
+            return redirect(url_for('admin'))
+
+        db.session.add(Matiere(nom=matiere_name, class_name=class_name, filiere_name=normalized_filiere))
         db.session.commit()
-        log_audit('matiere_added', f'nom={matiere_name}')
+        log_audit('matiere_added', f'nom={matiere_name}, classe={class_name}, filiere={normalized_filiere}')
         flash('Matière ajoutée avec succès.', 'success')
+    else:
+        flash('Le nom de la matière et la classe sont requis.', 'danger')
     return redirect(url_for('admin'))
 
 
@@ -845,7 +901,10 @@ def delete_matiere():
         if matiere_to_delete:
             db.session.delete(matiere_to_delete)
             db.session.commit()
-            log_audit('matiere_deleted', f'nom={matiere_to_delete.nom}')
+            log_audit(
+                'matiere_deleted',
+                f'nom={matiere_to_delete.nom}, classe={matiere_to_delete.class_name}, filiere={matiere_to_delete.filiere_name}'
+            )
             flash('Matière supprimée avec succès.', 'success')
     return redirect(url_for('admin'))
 
@@ -946,10 +1005,9 @@ def add_class_question():
     question_text = request.form.get('question_text', '').strip()
     response_type = request.form.get('response_type', 'scale').strip()
 
-    if class_name == 'L1':
-        filiere_name = L1_LABEL
-    elif filiere_name not in FILIERES_ITER:
-        flash('Veuillez sélectionner une filière valide pour les classes L2/L3.', 'danger')
+    normalized_filiere = normalize_filiere_for_class(class_name, filiere_name)
+    if not normalized_filiere:
+        flash('Veuillez sélectionner une filière valide pour cette classe.', 'danger')
         return redirect(url_for('admin'))
 
     if not class_name or volet_name not in VOLETS or not question_text or response_type not in {'scale', 'text'}:
@@ -958,13 +1016,13 @@ def add_class_question():
 
     db.session.add(ClassQuestion(
         class_name=class_name,
-        filiere_name=filiere_name,
+        filiere_name=normalized_filiere,
         volet_name=volet_name,
         question_text=question_text,
         response_type=response_type,
     ))
     db.session.commit()
-    log_audit('class_question_added', f'class={class_name}, filiere={filiere_name}, volet={volet_name}, response_type={response_type}, question={question_text[:80]}')
+    log_audit('class_question_added', f'class={class_name}, filiere={normalized_filiere}, volet={volet_name}, response_type={response_type}, question={question_text[:80]}')
     flash('Question de classe ajoutée avec succès.', 'success')
     return redirect(url_for('admin'))
 
@@ -1088,6 +1146,18 @@ def run_schema_updates():
     if 'volet_name' not in class_question_columns:
         db.session.execute(text("ALTER TABLE class_question ADD COLUMN volet_name VARCHAR(30) DEFAULT 'enseignement'"))
         db.session.execute(text("UPDATE class_question SET volet_name = 'enseignement' WHERE volet_name IS NULL"))
+        db.session.commit()
+
+    matiere_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(matiere)"))}
+    if 'class_name' not in matiere_columns:
+        db.session.execute(text("ALTER TABLE matiere ADD COLUMN class_name VARCHAR(100) DEFAULT 'ALL'"))
+        db.session.execute(text("UPDATE matiere SET class_name = 'ALL' WHERE class_name IS NULL"))
+        db.session.commit()
+
+    matiere_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(matiere)"))}
+    if 'filiere_name' not in matiere_columns:
+        db.session.execute(text("ALTER TABLE matiere ADD COLUMN filiere_name VARCHAR(30) DEFAULT 'ALL'"))
+        db.session.execute(text("UPDATE matiere SET filiere_name = 'ALL' WHERE filiere_name IS NULL"))
         db.session.commit()
 
 
