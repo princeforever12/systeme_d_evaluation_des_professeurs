@@ -205,6 +205,10 @@ def build_dashboard_query(filiere_name=None, classe_name=None, subject_name=None
     return query
 
 
+def get_standard_classes():
+    return Classe.query.filter(Classe.nom.in_(CLASS_LEVELS)).order_by(Classe.nom.asc()).all()
+
+
 @app.route('/')
 def home():
     return render_template('home.html')
@@ -320,7 +324,7 @@ def admin():
         return redirect(url_for('login'))
 
     ensure_default_classes()
-    classes = Classe.query.filter(Classe.nom.in_(CLASS_LEVELS)).order_by(Classe.nom.asc()).all()
+    classes = get_standard_classes()
     matieres = Matiere.query.all()
     teachers = Teacher.query.order_by(Teacher.created_at.desc()).all()
     questionnaires = Questionnaire.query.order_by(Questionnaire.created_at.desc()).all()
@@ -564,7 +568,7 @@ def teacher_dashboard():
         'infrastructure': round(sum(r.infrastructure_quality for r in responses) / total, 2) if total else 0,
     }
 
-    classes = Classe.query.filter(Classe.nom.in_(CLASS_LEVELS)).order_by(Classe.nom.asc()).all()
+    classes = get_standard_classes()
     matieres = Matiere.query.all()
     return render_template(
         'teacher_dashboard.html',
@@ -749,8 +753,8 @@ def dashboard():
             ) / (3 * total), 2),
         }
 
-    classes = Classe.query.all()
-    matieres = Matiere.query.all()
+    classes = get_standard_classes()
+    matieres = Matiere.query.order_by(Matiere.nom.asc()).all()
     return render_template(
         'dashboard.html',
         metrics=metrics,
@@ -1130,6 +1134,20 @@ def run_schema_updates():
         db.session.execute(text("ALTER TABLE survey_response ADD COLUMN infrastructure_quality INTEGER DEFAULT 0"))
         db.session.execute(text("UPDATE survey_response SET infrastructure_quality = 0 WHERE infrastructure_quality IS NULL"))
         db.session.commit()
+
+    # Normalise les anciennes valeurs de classe de type "L2 I", "L3 IMT", etc.
+    for level in ('L2', 'L3'):
+        for filiere in FILIERES_ITER:
+            legacy_class = f"{level} {filiere}"
+            db.session.execute(
+                text(
+                    "UPDATE survey_response "
+                    "SET class_name = :level, filiere_name = :filiere "
+                    "WHERE class_name = :legacy_class"
+                ),
+                {"level": level, "filiere": filiere, "legacy_class": legacy_class},
+            )
+    db.session.commit()
 
     teacher_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(teacher)"))}
     if 'assigned_subject_name' not in teacher_columns:
