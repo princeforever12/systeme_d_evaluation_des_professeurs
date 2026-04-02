@@ -34,6 +34,57 @@ VOLET_LABELS = {
     'infrastructures': 'Infrastructures pédagogiques',
 }
 
+DEFAULT_QUESTION_BANK = {
+    'enseignement': [
+        ('Le contenu du cours est-il clair ?', 'scale'),
+        ('Les objectifs sont-ils bien définis ?', 'scale'),
+        ('Le niveau est-il adapté ?', 'scale'),
+        ('Les supports sont-ils de qualité ?', 'scale'),
+        ('Le cours favorise-t-il la compréhension ?', 'scale'),
+        ('Les exemples sont-ils pertinents ?', 'scale'),
+        ('Le contenu est-il à jour ?', 'scale'),
+        ('Le volume horaire est-il suffisant ?', 'scale'),
+        ('Quelles compétences utiles avez-vous le plus développées dans ce cours ?', 'text'),
+        ('Quelle amélioration proposeriez-vous pour ce cours ?', 'text'),
+    ],
+    'enseignant': [
+        ('Maîtrise-t-il son sujet ?', 'scale'),
+        ('Explique-t-il clairement ?', 'scale'),
+        ('Est-il disponible ?', 'scale'),
+        ('Encourage-t-il la participation ?', 'scale'),
+        ('Respecte-t-il les horaires ?', 'scale'),
+        ('Les méthodes sont-elles adaptées ?', 'scale'),
+        ('Donne-t-il des exemples pertinents ?', 'scale'),
+        ('Est-il organisé ?', 'scale'),
+        ('Quels sont les points forts de l’enseignant ?', 'text'),
+        ('Quelles améliorations suggérez-vous pour l’enseignant ?', 'text'),
+    ],
+    'organisation': [
+        ('Emploi du temps organisé ?', 'scale'),
+        ('Cours à l’heure ?', 'scale'),
+        ('Pas de chevauchement ?', 'scale'),
+        ('Informations bien communiquées ?', 'scale'),
+        ('Examens bien planifiés ?', 'scale'),
+        ('Charge de travail équilibrée ?', 'scale'),
+        ('Changements annoncés à temps ?', 'scale'),
+        ('Bonne répartition des séances ?', 'scale'),
+        ('Quels problèmes d’organisation avez-vous rencontrés ?', 'text'),
+        ('Quelle solution proposez-vous pour améliorer l’organisation ?', 'text'),
+    ],
+    'infrastructures': [
+        ('Salles adaptées ?', 'scale'),
+        ('Équipements fonctionnels ?', 'scale'),
+        ('Internet fiable ?', 'scale'),
+        ('Laboratoires équipés ?', 'scale'),
+        ('Bibliothèque suffisante ?', 'scale'),
+        ('Espaces de travail disponibles ?', 'scale'),
+        ('Propreté satisfaisante ?', 'scale'),
+        ('Capacité des salles suffisante ?', 'scale'),
+        ('Quel équipement/infrastructure manque le plus ?', 'text'),
+        ('Quelle priorité d’amélioration recommandez-vous ?', 'text'),
+    ],
+}
+
 
 def is_l1_class(class_name):
     if not class_name:
@@ -191,6 +242,44 @@ def ensure_default_classes():
     missing = [name for name in DEFAULT_CLASSES if name not in existing_names]
     if missing:
         db.session.add_all([Classe(nom=name) for name in missing])
+        db.session.commit()
+
+
+def seed_default_class_questions():
+    scopes = [
+        ('L1', L1_LABEL),
+        ('L2', TRONC_COMMUN_LABEL),
+        ('L2', 'I'),
+        ('L2', 'IMT'),
+        ('L2', 'EEA'),
+        ('L3', TRONC_COMMUN_LABEL),
+        ('L3', 'I'),
+        ('L3', 'IMT'),
+        ('L3', 'EEA'),
+    ]
+    existing = {
+        (q.class_name, q.filiere_name, q.volet_name, q.question_text)
+        for q in ClassQuestion.query.all()
+    }
+    to_insert = []
+    for class_name, filiere_name in scopes:
+        for volet_name, questions in DEFAULT_QUESTION_BANK.items():
+            for question_text, response_type in questions:
+                key = (class_name, filiere_name, volet_name, question_text)
+                if key in existing:
+                    continue
+                to_insert.append(
+                    ClassQuestion(
+                        class_name=class_name,
+                        filiere_name=filiere_name,
+                        volet_name=volet_name,
+                        question_text=question_text,
+                        response_type=response_type,
+                    )
+                )
+                existing.add(key)
+    if to_insert:
+        db.session.add_all(to_insert)
         db.session.commit()
 
 
@@ -1184,4 +1273,5 @@ if __name__ == '__main__':
         db.create_all()
         run_schema_updates()
         ensure_default_classes()
+        seed_default_class_questions()
         app.run(host='0.0.0.0', port=5000)
