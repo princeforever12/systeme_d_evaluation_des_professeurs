@@ -39,10 +39,6 @@
                     <h3 class="text-lg font-semibold mb-3">Créer une campagne</h3>
                     <form method="POST" action="{{ url_for('create_campaign') }}" class="space-y-3">
                         <input type="text" name="campaign_name" placeholder="Ex: Campagne S1 2026" required class="w-full p-2 border rounded">
-                        <select name="filiere" required class="w-full p-2 border rounded">
-                            <option value="">Filière</option>
-                            {% for filiere in filieres %}<option value="{{ filiere }}">{{ filiere }}</option>{% endfor %}
-                        </select>
                         <button class="bg-red-700 text-white px-4 py-2 rounded">Créer</button>
                     </form>
                 </div>
@@ -53,20 +49,28 @@
                         <select name="campaign_id" required class="w-full p-2 border rounded">
                             <option value="">Campagne</option>
                             {% for campaign in campaigns %}
-                                <option value="{{ campaign.id }}">{{ campaign.name }} ({{ campaign.filiere_name }}) {% if campaign.is_active %}- ACTIVE{% endif %}</option>
+                                <option value="{{ campaign.id }}">{{ campaign.name }} {% if campaign.is_active %}- ACTIVE{% endif %}</option>
                             {% endfor %}
                         </select>
-                        <select name="filiere" required class="w-full p-2 border rounded">
+                        <select name="filiere" id="token_filiere" required class="w-full p-2 border rounded">
                             <option value="">Filière</option>
                             {% for filiere in filieres %}<option value="{{ filiere }}">{{ filiere }}</option>{% endfor %}
                         </select>
-                        <select name="classe_name" required class="w-full p-2 border rounded">
+                        <select name="classe_name" id="token_class_name" required class="w-full p-2 border rounded">
                             <option value="">Classe</option>
                             {% for classe in classes %}<option value="{{ classe.nom }}">{{ classe.nom }}</option>{% endfor %}
                         </select>
-                        <select name="subject_name" required class="w-full p-2 border rounded">
+                        <select name="subject_name" id="token_subject_name" required class="w-full p-2 border rounded">
                             <option value="">Matière</option>
-                            {% for matiere in matieres %}<option value="{{ matiere.nom }}">{{ matiere.nom }}</option>{% endfor %}
+                            {% for matiere in matieres %}
+                                <option
+                                    value="{{ matiere.nom }}"
+                                    data-class-name="{{ matiere.class_name }}"
+                                    data-filiere-name="{{ matiere.filiere_name }}"
+                                >
+                                    {{ matiere.nom }} ({{ matiere.class_name }} / {{ matiere.filiere_name }})
+                                </option>
+                            {% endfor %}
                         </select>
                         <input type="number" name="count" min="1" max="200" value="10" required class="w-full p-2 border rounded">
                         <button class="bg-red-700 text-white px-4 py-2 rounded">Générer</button>
@@ -82,7 +86,7 @@
                             <div class="border p-3 rounded flex justify-between items-center">
                                 <div>
                                     <p class="font-semibold">{{ campaign.name }}</p>
-                                    <p class="text-sm text-gray-500">{{ campaign.filiere_name }} • {{ campaign.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                                    <p class="text-sm text-gray-500">{{ campaign.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
                                 </div>
                                 {% if campaign.is_active %}
                                     <div class="flex items-center gap-2">
@@ -365,6 +369,9 @@
     const questionFiliereSelect = document.getElementById('question_filiere_name');
     const subjectClassSelect = document.getElementById('subject_class_name');
     const subjectFiliereSelect = document.getElementById('subject_filiere_name');
+    const tokenClassSelect = document.getElementById('token_class_name');
+    const tokenFiliereSelect = document.getElementById('token_filiere');
+    const tokenSubjectSelect = document.getElementById('token_subject_name');
 
     function updateQuestionFiliereRequirement() {
         if (!questionClassSelect || !questionFiliereSelect) return;
@@ -392,6 +399,46 @@
     if (subjectClassSelect && subjectFiliereSelect) {
         subjectClassSelect.addEventListener('change', updateSubjectFiliereRequirement);
         updateSubjectFiliereRequirement();
+    }
+
+    function updateTokenForm() {
+        if (!tokenClassSelect || !tokenFiliereSelect || !tokenSubjectSelect) return;
+
+        const selectedClass = tokenClassSelect.value;
+        const selectedFiliere = tokenFiliereSelect.value;
+        const isL1 = selectedClass === 'L1';
+
+        tokenFiliereSelect.required = !!selectedClass;
+        if (isL1) {
+            tokenFiliereSelect.value = 'L1 (sans filière)';
+        }
+
+        const availableSubjectValues = [];
+        for (const option of tokenSubjectSelect.options) {
+            if (!option.value) {
+                option.hidden = false;
+                continue;
+            }
+            const optionClass = option.dataset.className;
+            const optionFiliere = option.dataset.filiereName;
+            const classMatch = !selectedClass || optionClass === selectedClass || optionClass === 'ALL';
+            const filiereMatch = !selectedFiliere || optionFiliere === selectedFiliere || optionFiliere === 'Tronc commun' || optionFiliere === 'ALL';
+            const visible = classMatch && filiereMatch;
+            option.hidden = !visible;
+            if (visible) {
+                availableSubjectValues.push(option.value);
+            }
+        }
+
+        if (!availableSubjectValues.includes(tokenSubjectSelect.value)) {
+            tokenSubjectSelect.value = '';
+        }
+    }
+
+    if (tokenClassSelect && tokenFiliereSelect && tokenSubjectSelect) {
+        tokenClassSelect.addEventListener('change', updateTokenForm);
+        tokenFiliereSelect.addEventListener('change', updateTokenForm);
+        updateTokenForm();
     }
 </script>
 </body>
