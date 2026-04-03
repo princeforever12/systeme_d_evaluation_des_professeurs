@@ -559,6 +559,56 @@ def generate_tokens():
     return redirect(url_for('admin'))
 
 
+@app.route('/tokens/export.csv', methods=['GET'])
+def export_tokens_csv():
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    campaign_id = request.args.get('campaign_id', type=int)
+    only_unused = request.args.get('only_unused', '1').lower() in {'1', 'true', 'yes', 'on'}
+
+    query = EvaluationToken.query
+    if campaign_id:
+        query = query.filter_by(campaign_id=campaign_id)
+    if only_unused:
+        query = query.filter_by(is_used=False)
+
+    tokens = query.order_by(EvaluationToken.created_at.desc()).all()
+    campaigns_by_id = {c.id: c.name for c in EvaluationCampaign.query.all()}
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'token',
+        'campagne',
+        'filiere',
+        'classe',
+        'matiere',
+        'utilise',
+        'date_creation',
+        'date_utilisation',
+    ])
+    for token in tokens:
+        writer.writerow([
+            token.token,
+            campaigns_by_id.get(token.campaign_id, 'Sans campagne'),
+            token.filiere_name,
+            token.class_name,
+            token.subject_name,
+            'oui' if token.is_used else 'non',
+            token.created_at.strftime('%Y-%m-%d %H:%M:%S') if token.created_at else '',
+            token.used_at.strftime('%Y-%m-%d %H:%M:%S') if token.used_at else '',
+        ])
+
+    suffix = f"_campaign_{campaign_id}" if campaign_id else ""
+    filename = f"tokens_export{suffix}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={filename}'},
+    )
+
+
 @app.route('/change_credentials', methods=['GET', 'POST'])
 def change_credentials():
     global ADMIN_USERNAME, ADMIN_PASSWORD_HASH

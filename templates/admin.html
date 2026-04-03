@@ -75,6 +75,21 @@
                         <input type="number" name="count" min="1" max="200" value="10" required class="w-full p-2 border rounded">
                         <button class="bg-red-700 text-white px-4 py-2 rounded">Générer</button>
                     </form>
+
+                    <form method="GET" action="{{ url_for('export_tokens_csv') }}" class="space-y-2 mt-4 pt-4 border-t">
+                        <label class="text-sm font-semibold block">Exporter les tokens (CSV)</label>
+                        <select name="campaign_id" class="w-full p-2 border rounded">
+                            <option value="">Toutes les campagnes</option>
+                            {% for campaign in campaigns %}
+                                <option value="{{ campaign.id }}">{{ campaign.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <label class="inline-flex items-center gap-2 text-sm">
+                            <input type="checkbox" name="only_unused" value="1" checked>
+                            Exporter seulement les tokens non utilisés
+                        </label>
+                        <button class="bg-slate-700 text-white px-4 py-2 rounded">Télécharger CSV</button>
+                    </form>
                 </div>
             </div>
 
