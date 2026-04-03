@@ -15,22 +15,29 @@
 
         <div class="bg-white p-6 rounded-lg shadow mb-6">
             <form method="GET" action="{{ url_for('dashboard') }}" class="grid md:grid-cols-4 gap-4">
-                <select name="filiere" class="p-2 border rounded">
-                    <option value="">Toutes les filières</option>
-                    {% for filiere in filieres %}
-                        <option value="{{ filiere }}" {% if selected.filiere == filiere %}selected{% endif %}>{{ filiere }}</option>
-                    {% endfor %}
-                </select>
-                <select name="classe" class="p-2 border rounded">
+                <select name="classe" id="dashboard_class" class="p-2 border rounded">
                     <option value="">Toutes les classes</option>
                     {% for classe in classes %}
                         <option value="{{ classe.nom }}" {% if selected.classe == classe.nom %}selected{% endif %}>{{ classe.nom }}</option>
                     {% endfor %}
                 </select>
-                <select name="matiere" class="p-2 border rounded">
+                <select name="filiere" id="dashboard_filiere" class="p-2 border rounded">
+                    <option value="">Toutes les filières</option>
+                    {% for filiere in filieres %}
+                        <option value="{{ filiere }}" {% if selected.filiere == filiere %}selected{% endif %}>{{ filiere }}</option>
+                    {% endfor %}
+                </select>
+                <select name="matiere" id="dashboard_matiere" class="p-2 border rounded">
                     <option value="">Toutes les matières</option>
                     {% for matiere in matieres %}
-                        <option value="{{ matiere.nom }}" {% if selected.matiere == matiere.nom %}selected{% endif %}>{{ matiere.nom }}</option>
+                        <option
+                            value="{{ matiere.nom }}"
+                            data-class-name="{{ matiere.class_name }}"
+                            data-filiere-name="{{ matiere.filiere_name }}"
+                            {% if selected.matiere == matiere.nom %}selected{% endif %}
+                        >
+                            {{ matiere.nom }}
+                        </option>
                     {% endfor %}
                 </select>
                 <button class="bg-red-700 text-white rounded px-4 py-2">Appliquer</button>
@@ -38,6 +45,8 @@
 
             <div class="mt-4">
                 <a class="text-red-700 underline" href="{{ url_for('dashboard_export_csv', filiere=selected.filiere, classe=selected.classe, matiere=selected.matiere) }}">Télécharger l'export CSV</a>
+                <span class="mx-2 text-gray-400">|</span>
+                <a class="text-red-700 underline" href="{{ url_for('dashboard_export_pdf', filiere=selected.filiere, classe=selected.classe, matiere=selected.matiere) }}">Télécharger l'export PDF</a>
             </div>
         </div>
 
@@ -49,5 +58,43 @@
             <div class="bg-white p-4 rounded shadow"><p class="text-sm text-gray-500">Pédagogie /10</p><p class="text-2xl font-bold">{{ metrics.pedagogy }}</p></div>
         </div>
     </div>
+    <script>
+        const dashboardClassSelect = document.getElementById('dashboard_class');
+        const dashboardFiliereSelect = document.getElementById('dashboard_filiere');
+        const dashboardMatiereSelect = document.getElementById('dashboard_matiere');
+
+        function updateDashboardFilters() {
+            if (!dashboardClassSelect || !dashboardFiliereSelect || !dashboardMatiereSelect) return;
+            const selectedClass = dashboardClassSelect.value;
+            const isL1 = selectedClass === 'L1';
+
+            for (const option of dashboardFiliereSelect.options) {
+                if (!option.value) continue;
+                option.hidden = isL1 ? option.value !== 'L1 (sans filière)' : option.value === 'L1 (sans filière)';
+            }
+            if (isL1) {
+                dashboardFiliereSelect.value = 'L1 (sans filière)';
+            } else if (dashboardFiliereSelect.value === 'L1 (sans filière)') {
+                dashboardFiliereSelect.value = '';
+            }
+
+            const selectedFiliere = dashboardFiliereSelect.value;
+            const visibleValues = [];
+            for (const option of dashboardMatiereSelect.options) {
+                if (!option.value) continue;
+                const classMatch = !selectedClass || option.dataset.className === selectedClass || option.dataset.className === 'ALL';
+                const filiereMatch = !selectedFiliere || option.dataset.filiereName === selectedFiliere || option.dataset.filiereName === 'Tronc commun' || option.dataset.filiereName === 'ALL';
+                option.hidden = !(classMatch && filiereMatch);
+                if (!option.hidden) visibleValues.push(option.value);
+            }
+            if (!visibleValues.includes(dashboardMatiereSelect.value)) {
+                dashboardMatiereSelect.value = '';
+            }
+        }
+
+        dashboardClassSelect?.addEventListener('change', updateDashboardFilters);
+        dashboardFiliereSelect?.addEventListener('change', updateDashboardFilters);
+        updateDashboardFilters();
+    </script>
 </body>
 </html>

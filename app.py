@@ -21,7 +21,9 @@ db = SQLAlchemy(app)
 
 FILIERES_ITER = ['I', 'IMT', 'EEA']
 L1_LABEL = 'L1 (sans filière)'
-ALL_FILIERES = [L1_LABEL] + FILIERES_ITER
+TRONC_COMMUN_LABEL = 'Tronc commun'
+CAMPAIGN_GLOBAL_LABEL = 'ALL'
+ALL_FILIERES = [L1_LABEL, TRONC_COMMUN_LABEL] + FILIERES_ITER
 CLASS_LEVELS = ['L1', 'L2', 'L3']
 DEFAULT_CLASSES = CLASS_LEVELS
 VOLETS = ['enseignement', 'enseignant', 'organisation', 'infrastructures']
@@ -32,12 +34,121 @@ VOLET_LABELS = {
     'infrastructures': 'Infrastructures pédagogiques',
 }
 
+DEFAULT_QUESTION_BANK = {
+    'enseignement': [
+        ('Le contenu du cours est-il clair ?', 'scale'),
+        ('Les objectifs sont-ils bien définis ?', 'scale'),
+        ('Le niveau est-il adapté ?', 'scale'),
+        ('Les supports sont-ils de qualité ?', 'scale'),
+        ('Le cours favorise-t-il la compréhension ?', 'scale'),
+        ('Les exemples sont-ils pertinents ?', 'scale'),
+        ('Le contenu est-il à jour ?', 'scale'),
+        ('Le volume horaire est-il suffisant ?', 'scale'),
+        ('Quelles compétences utiles avez-vous le plus développées dans ce cours ?', 'text'),
+        ('Quelle amélioration proposeriez-vous pour ce cours ?', 'text'),
+    ],
+    'enseignant': [
+        ('Maîtrise-t-il son sujet ?', 'scale'),
+        ('Explique-t-il clairement ?', 'scale'),
+        ('Est-il disponible ?', 'scale'),
+        ('Encourage-t-il la participation ?', 'scale'),
+        ('Respecte-t-il les horaires ?', 'scale'),
+        ('Les méthodes sont-elles adaptées ?', 'scale'),
+        ('Donne-t-il des exemples pertinents ?', 'scale'),
+        ('Est-il organisé ?', 'scale'),
+        ('Quels sont les points forts de l’enseignant ?', 'text'),
+        ('Quelles améliorations suggérez-vous pour l’enseignant ?', 'text'),
+    ],
+    'organisation': [
+        ('Emploi du temps organisé ?', 'scale'),
+        ('Cours à l’heure ?', 'scale'),
+        ('Pas de chevauchement ?', 'scale'),
+        ('Informations bien communiquées ?', 'scale'),
+        ('Examens bien planifiés ?', 'scale'),
+        ('Charge de travail équilibrée ?', 'scale'),
+        ('Changements annoncés à temps ?', 'scale'),
+        ('Bonne répartition des séances ?', 'scale'),
+        ('Quels problèmes d’organisation avez-vous rencontrés ?', 'text'),
+        ('Quelle solution proposez-vous pour améliorer l’organisation ?', 'text'),
+    ],
+    'infrastructures': [
+        ('Salles adaptées ?', 'scale'),
+        ('Équipements fonctionnels ?', 'scale'),
+        ('Internet fiable ?', 'scale'),
+        ('Laboratoires équipés ?', 'scale'),
+        ('Bibliothèque suffisante ?', 'scale'),
+        ('Espaces de travail disponibles ?', 'scale'),
+        ('Propreté satisfaisante ?', 'scale'),
+        ('Capacité des salles suffisante ?', 'scale'),
+        ('Quel équipement/infrastructure manque le plus ?', 'text'),
+        ('Quelle priorité d’amélioration recommandez-vous ?', 'text'),
+    ],
+}
+
+
+def _pdf_escape(text_value):
+    value = str(text_value or '')
+    return value.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+
+
+def build_simple_pdf(title, lines):
+    max_lines = 60
+    lines = [title] + list(lines[:max_lines])
+    content_parts = [
+        "BT",
+        "/F1 12 Tf",
+        "50 800 Td",
+    ]
+    for idx, line in enumerate(lines):
+        if idx == 0:
+            content_parts.append(f"({_pdf_escape(line)}) Tj")
+        else:
+            content_parts.append("0 -14 Td")
+            content_parts.append(f"({_pdf_escape(line)}) Tj")
+    content_parts.append("ET")
+    content = "\n".join(content_parts).encode('latin-1', errors='replace')
+
+    objects = []
+    objects.append(b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj")
+    objects.append(b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj")
+    objects.append(b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj")
+    objects.append(b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj")
+    objects.append(
+        b"5 0 obj << /Length " + str(len(content)).encode('ascii') + b" >> stream\n" + content + b"\nendstream endobj"
+    )
+
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for obj in objects:
+        offsets.append(len(pdf))
+        pdf.extend(obj + b"\n")
+    xref_pos = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects) + 1}\n".encode('ascii'))
+    pdf.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode('ascii'))
+    pdf.extend(
+        f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF".encode('ascii')
+    )
+    return bytes(pdf)
+
 
 def is_l1_class(class_name):
     if not class_name:
         return False
     normalized = class_name.strip().upper()
     return bool(re.search(r'\b(L\s*1|LICENCE\s*1|LICENSE\s*1)\b', normalized))
+
+
+def normalize_filiere_for_class(class_name, filiere_name):
+    class_name = (class_name or '').strip()
+    filiere_name = (filiere_name or '').strip()
+
+    if is_l1_class(class_name):
+        return L1_LABEL
+    if filiere_name in FILIERES_ITER or filiere_name == TRONC_COMMUN_LABEL:
+        return filiere_name
+    return None
 
 
 # Modèles de base de données
@@ -49,6 +160,8 @@ class Classe(db.Model):
 class Matiere(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nom = db.Column(db.String(100), nullable=False)
+    class_name = db.Column(db.String(100), nullable=False, default='ALL')
+    filiere_name = db.Column(db.String(30), nullable=False, default='ALL')
 
 
 class EvaluationCampaign(db.Model):
@@ -179,6 +292,44 @@ def ensure_default_classes():
         db.session.commit()
 
 
+def seed_default_class_questions():
+    scopes = [
+        ('L1', L1_LABEL),
+        ('L2', TRONC_COMMUN_LABEL),
+        ('L2', 'I'),
+        ('L2', 'IMT'),
+        ('L2', 'EEA'),
+        ('L3', TRONC_COMMUN_LABEL),
+        ('L3', 'I'),
+        ('L3', 'IMT'),
+        ('L3', 'EEA'),
+    ]
+    existing = {
+        (q.class_name, q.filiere_name, q.volet_name, q.question_text)
+        for q in ClassQuestion.query.all()
+    }
+    to_insert = []
+    for class_name, filiere_name in scopes:
+        for volet_name, questions in DEFAULT_QUESTION_BANK.items():
+            for question_text, response_type in questions:
+                key = (class_name, filiere_name, volet_name, question_text)
+                if key in existing:
+                    continue
+                to_insert.append(
+                    ClassQuestion(
+                        class_name=class_name,
+                        filiere_name=filiere_name,
+                        volet_name=volet_name,
+                        question_text=question_text,
+                        response_type=response_type,
+                    )
+                )
+                existing.add(key)
+    if to_insert:
+        db.session.add_all(to_insert)
+        db.session.commit()
+
+
 def build_dashboard_query(filiere_name=None, classe_name=None, subject_name=None):
     query = SurveyResponse.query
     if filiere_name:
@@ -188,6 +339,10 @@ def build_dashboard_query(filiere_name=None, classe_name=None, subject_name=None
     if subject_name:
         query = query.filter_by(subject_name=subject_name)
     return query
+
+
+def get_standard_classes():
+    return Classe.query.filter(Classe.nom.in_(CLASS_LEVELS)).order_by(Classe.nom.asc()).all()
 
 
 @app.route('/')
@@ -218,9 +373,9 @@ def survey():
 
     query = ClassQuestion.query.filter_by(class_name=class_name)
     if filiere_name == L1_LABEL:
-        query = query.filter_by(filiere_name=L1_LABEL)
+        query = query.filter(ClassQuestion.filiere_name.in_([L1_LABEL, 'ALL']))
     else:
-        query = query.filter(ClassQuestion.filiere_name.in_([filiere_name, 'ALL']))
+        query = query.filter(ClassQuestion.filiere_name.in_([filiere_name, TRONC_COMMUN_LABEL, 'ALL']))
     class_questions = query.order_by(ClassQuestion.created_at.asc()).all()
     questions_by_volet = {volet: [] for volet in VOLETS}
     for question in class_questions:
@@ -305,7 +460,7 @@ def admin():
         return redirect(url_for('login'))
 
     ensure_default_classes()
-    classes = Classe.query.filter(Classe.nom.in_(CLASS_LEVELS)).order_by(Classe.nom.asc()).all()
+    classes = get_standard_classes()
     matieres = Matiere.query.all()
     teachers = Teacher.query.order_by(Teacher.created_at.desc()).all()
     questionnaires = Questionnaire.query.order_by(Questionnaire.created_at.desc()).all()
@@ -337,15 +492,14 @@ def create_campaign():
         return redirect(url_for('login'))
 
     name = request.form.get('campaign_name', '').strip()
-    filiere = request.form.get('filiere', '').strip()
-    if not name or filiere not in ALL_FILIERES:
-        flash('Nom de campagne ou filière invalide.', 'danger')
+    if not name:
+        flash('Nom de campagne invalide.', 'danger')
         return redirect(url_for('admin'))
 
-    campaign = EvaluationCampaign(name=name, filiere_name=filiere, is_active=False)
+    campaign = EvaluationCampaign(name=name, filiere_name=CAMPAIGN_GLOBAL_LABEL, is_active=False)
     db.session.add(campaign)
     db.session.commit()
-    log_audit('campaign_created', f'name={name}, filiere={filiere}')
+    log_audit('campaign_created', f'name={name}')
     flash('Campagne créée avec succès.', 'success')
     return redirect(url_for('admin'))
 
@@ -356,11 +510,11 @@ def activate_campaign(campaign_id):
         return redirect(url_for('login'))
 
     campaign = EvaluationCampaign.query.get_or_404(campaign_id)
-    EvaluationCampaign.query.filter_by(filiere_name=campaign.filiere_name, is_active=True).update({'is_active': False})
+    EvaluationCampaign.query.filter_by(is_active=True).update({'is_active': False})
     campaign.is_active = True
     db.session.commit()
-    log_audit('campaign_activated', f'name={campaign.name}, filiere={campaign.filiere_name}')
-    flash(f'Campagne "{campaign.name}" activée pour la filière {campaign.filiere_name}.', 'success')
+    log_audit('campaign_activated', f'name={campaign.name}')
+    flash(f'Campagne "{campaign.name}" activée.', 'success')
     return redirect(url_for('admin'))
 
 
@@ -413,7 +567,8 @@ def generate_tokens():
     campaign_id = request.form.get('campaign_id', type=int)
     count = request.form.get('count', type=int)
 
-    if filiere not in ALL_FILIERES or not classe_name or not subject_name:
+    normalized_filiere = normalize_filiere_for_class(classe_name, filiere)
+    if not normalized_filiere or not classe_name or not subject_name:
         flash('Paramètres de génération invalides.', 'danger')
         return redirect(url_for('admin'))
 
@@ -422,15 +577,22 @@ def generate_tokens():
         return redirect(url_for('admin'))
 
     campaign = EvaluationCampaign.query.get(campaign_id) if campaign_id else None
-    if not campaign or campaign.filiere_name != filiere:
-        flash('Campagne invalide pour la filière sélectionnée.', 'danger')
+    if not campaign:
+        flash('Campagne invalide.', 'danger')
+        return redirect(url_for('admin'))
+
+    subject = Matiere.query.filter_by(nom=subject_name, class_name=classe_name).filter(
+        Matiere.filiere_name.in_([normalized_filiere, TRONC_COMMUN_LABEL, 'ALL'])
+    ).first()
+    if not subject:
+        flash('La matière sélectionnée ne correspond pas à la classe/filière choisie.', 'danger')
         return redirect(url_for('admin'))
 
     created = 0
     for _ in range(count):
         db.session.add(EvaluationToken(
             token=generate_unique_token(),
-            filiere_name=filiere,
+            filiere_name=normalized_filiere,
             class_name=classe_name,
             subject_name=subject_name,
             campaign_id=campaign.id,
@@ -439,9 +601,93 @@ def generate_tokens():
         created += 1
 
     db.session.commit()
-    log_audit('tokens_generated', f'count={created}, filiere={filiere}, classe={classe_name}, matiere={subject_name}')
-    flash(f'{created} tokens générés pour {filiere} / {classe_name} / {subject_name}.', 'success')
+    log_audit('tokens_generated', f'count={created}, filiere={normalized_filiere}, classe={classe_name}, matiere={subject_name}')
+    flash(f'{created} tokens générés pour {normalized_filiere} / {classe_name} / {subject_name}.', 'success')
     return redirect(url_for('admin'))
+
+
+@app.route('/tokens/export.csv', methods=['GET'])
+def export_tokens_csv():
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    campaign_id = request.args.get('campaign_id', type=int)
+    only_unused = request.args.get('only_unused', '1').lower() in {'1', 'true', 'yes', 'on'}
+
+    query = EvaluationToken.query
+    if campaign_id:
+        query = query.filter_by(campaign_id=campaign_id)
+    if only_unused:
+        query = query.filter_by(is_used=False)
+
+    tokens = query.order_by(EvaluationToken.created_at.desc()).all()
+    campaigns_by_id = {c.id: c.name for c in EvaluationCampaign.query.all()}
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'token',
+        'campagne',
+        'filiere',
+        'classe',
+        'matiere',
+        'utilise',
+        'date_creation',
+        'date_utilisation',
+    ])
+    for token in tokens:
+        writer.writerow([
+            token.token,
+            campaigns_by_id.get(token.campaign_id, 'Sans campagne'),
+            token.filiere_name,
+            token.class_name,
+            token.subject_name,
+            'oui' if token.is_used else 'non',
+            token.created_at.strftime('%Y-%m-%d %H:%M:%S') if token.created_at else '',
+            token.used_at.strftime('%Y-%m-%d %H:%M:%S') if token.used_at else '',
+        ])
+
+    suffix = f"_campaign_{campaign_id}" if campaign_id else ""
+    filename = f"tokens_export{suffix}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={filename}'},
+    )
+
+
+@app.route('/tokens/export.pdf', methods=['GET'])
+def export_tokens_pdf():
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    campaign_id = request.args.get('campaign_id', type=int)
+    only_unused = request.args.get('only_unused', '1').lower() in {'1', 'true', 'yes', 'on'}
+
+    query = EvaluationToken.query
+    if campaign_id:
+        query = query.filter_by(campaign_id=campaign_id)
+    if only_unused:
+        query = query.filter_by(is_used=False)
+
+    tokens = query.order_by(EvaluationToken.created_at.desc()).all()
+    campaigns_by_id = {c.id: c.name for c in EvaluationCampaign.query.all()}
+    lines = []
+    for token in tokens:
+        lines.append(
+            f"{token.token} | {campaigns_by_id.get(token.campaign_id, 'Sans campagne')} | "
+            f"{token.filiere_name} | {token.class_name} | {token.subject_name} | "
+            f"{'utilisé' if token.is_used else 'disponible'}"
+        )
+
+    pdf_bytes = build_simple_pdf("Export des tokens", lines)
+    suffix = f"_campaign_{campaign_id}" if campaign_id else ""
+    filename = f"tokens_export{suffix}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename={filename}'},
+    )
 
 
 @app.route('/change_credentials', methods=['GET', 'POST'])
@@ -542,7 +788,7 @@ def teacher_dashboard():
         'infrastructure': round(sum(r.infrastructure_quality for r in responses) / total, 2) if total else 0,
     }
 
-    classes = Classe.query.filter(Classe.nom.in_(CLASS_LEVELS)).order_by(Classe.nom.asc()).all()
+    classes = get_standard_classes()
     matieres = Matiere.query.all()
     return render_template(
         'teacher_dashboard.html',
@@ -586,15 +832,22 @@ def select():
                 flash('Classe ou matière invalide.', 'danger')
                 return redirect(url_for('select'))
 
-            if is_l1_class(classe.nom):
-                filiere_name = L1_LABEL
-            elif filiere_name not in FILIERES_ITER:
-                flash('Veuillez sélectionner une filière valide pour les classes de L2 et plus.', 'danger')
+            normalized_filiere = normalize_filiere_for_class(classe.nom, filiere_name)
+            if not normalized_filiere:
+                flash('Veuillez sélectionner une filière valide pour cette classe.', 'danger')
+                return redirect(url_for('select'))
+
+            if matiere.class_name not in ('ALL', classe.nom):
+                flash('La matière ne correspond pas à la classe sélectionnée.', 'danger')
+                return redirect(url_for('select'))
+
+            if matiere.filiere_name not in ('ALL', normalized_filiere, TRONC_COMMUN_LABEL):
+                flash('La matière ne correspond pas à la filière sélectionnée.', 'danger')
                 return redirect(url_for('select'))
 
             token_obj = EvaluationToken.query.filter_by(
                 token=access_token,
-                filiere_name=filiere_name,
+                filiere_name=normalized_filiere,
                 class_name=classe.nom,
                 subject_name=matiere.nom,
                 is_used=False,
@@ -609,17 +862,17 @@ def select():
                 flash('La campagne associée au token est fermée.', 'danger')
                 return redirect(url_for('select'))
 
-            session['filiere_name'] = filiere_name
+            session['filiere_name'] = normalized_filiere
             session['class_name'] = classe.nom
             session['subject_name'] = matiere.nom
             session['token_id'] = token_obj.id
-            log_audit('token_validated', f'token={access_token}, filiere={filiere_name}, classe={classe.nom}, matiere={matiere.nom}')
+            log_audit('token_validated', f'token={access_token}, filiere={normalized_filiere}, classe={classe.nom}, matiere={matiere.nom}')
             return redirect(url_for('survey'))
 
         flash('Veuillez sélectionner une classe, une matière et saisir un token.', 'danger')
 
     classes = Classe.query.filter(Classe.nom.in_(CLASS_LEVELS)).order_by(Classe.nom.asc()).all()
-    matieres = Matiere.query.all()
+    matieres = Matiere.query.order_by(Matiere.nom.asc()).all()
     return render_template('class_subject.html', classes=classes, matieres=matieres, filieres=ALL_FILIERES)
 
 
@@ -630,9 +883,13 @@ def result():
 
 @app.route('/report', methods=['GET', 'POST'])
 def generate_report():
-    filiere_name = request.form.get('filiere')
-    classe_name = request.form.get('classe')
-    matiere_name = request.form.get('matiere')
+    classe_name = request.form.get('classe', '').strip()
+    matiere_name = request.form.get('matiere', '').strip()
+    filiere_name = normalize_filiere_for_class(classe_name, request.form.get('filiere', '').strip())
+
+    if not classe_name or not matiere_name or not filiere_name:
+        flash('Veuillez sélectionner une classe, une filière valide et une matière.', 'warning')
+        return redirect(url_for('admin'))
 
     responses = SurveyResponse.query.filter_by(
         filiere_name=filiere_name,
@@ -716,8 +973,8 @@ def dashboard():
             ) / (3 * total), 2),
         }
 
-    classes = Classe.query.all()
-    matieres = Matiere.query.all()
+    classes = get_standard_classes()
+    matieres = Matiere.query.order_by(Matiere.nom.asc()).all()
     return render_template(
         'dashboard.html',
         metrics=metrics,
@@ -768,6 +1025,31 @@ def dashboard_export_csv():
     return Response(
         csv_data,
         mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={filename}'},
+    )
+
+
+@app.route('/dashboard/export.pdf', methods=['GET'])
+def dashboard_export_pdf():
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    filiere_name = request.args.get('filiere', '').strip() or None
+    classe_name = request.args.get('classe', '').strip() or None
+    subject_name = request.args.get('matiere', '').strip() or None
+
+    responses = build_dashboard_query(filiere_name, classe_name, subject_name).all()
+    lines = [
+        f"{r.filiere_name} | {r.class_name} | {r.subject_name} | "
+        f"satisfaction={r.overall_satisfaction} | organisation={r.schedule_organization} | "
+        f"infrastructures={r.infrastructure_quality}"
+        for r in responses
+    ]
+    pdf_bytes = build_simple_pdf("Export dashboard", lines)
+    filename = f"dashboard_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype='application/pdf',
         headers={'Content-Disposition': f'attachment; filename={filename}'},
     )
 
@@ -825,12 +1107,35 @@ def add_matiere():
     if not ensure_admin_session():
         return redirect(url_for('login'))
 
-    matiere_name = request.form.get('matiere_name')
-    if matiere_name:
-        db.session.add(Matiere(nom=matiere_name))
+    matiere_name = request.form.get('matiere_name', '').strip()
+    class_name = request.form.get('class_name', '').strip()
+    filiere_name = request.form.get('filiere_name', '').strip()
+
+    if matiere_name and class_name:
+        if class_name not in CLASS_LEVELS:
+            flash('Veuillez sélectionner une classe valide (L1/L2/L3).', 'danger')
+            return redirect(url_for('admin'))
+
+        normalized_filiere = normalize_filiere_for_class(class_name, filiere_name)
+        if not normalized_filiere:
+            flash('Veuillez sélectionner une filière valide pour cette classe.', 'danger')
+            return redirect(url_for('admin'))
+
+        existing = Matiere.query.filter_by(
+            nom=matiere_name,
+            class_name=class_name,
+            filiere_name=normalized_filiere,
+        ).first()
+        if existing:
+            flash('Cette matière existe déjà pour cette classe/filière.', 'warning')
+            return redirect(url_for('admin'))
+
+        db.session.add(Matiere(nom=matiere_name, class_name=class_name, filiere_name=normalized_filiere))
         db.session.commit()
-        log_audit('matiere_added', f'nom={matiere_name}')
+        log_audit('matiere_added', f'nom={matiere_name}, classe={class_name}, filiere={normalized_filiere}')
         flash('Matière ajoutée avec succès.', 'success')
+    else:
+        flash('Le nom de la matière et la classe sont requis.', 'danger')
     return redirect(url_for('admin'))
 
 
@@ -845,7 +1150,10 @@ def delete_matiere():
         if matiere_to_delete:
             db.session.delete(matiere_to_delete)
             db.session.commit()
-            log_audit('matiere_deleted', f'nom={matiere_to_delete.nom}')
+            log_audit(
+                'matiere_deleted',
+                f'nom={matiere_to_delete.nom}, classe={matiere_to_delete.class_name}, filiere={matiere_to_delete.filiere_name}'
+            )
             flash('Matière supprimée avec succès.', 'success')
     return redirect(url_for('admin'))
 
@@ -946,10 +1254,9 @@ def add_class_question():
     question_text = request.form.get('question_text', '').strip()
     response_type = request.form.get('response_type', 'scale').strip()
 
-    if class_name == 'L1':
-        filiere_name = L1_LABEL
-    elif filiere_name not in FILIERES_ITER:
-        flash('Veuillez sélectionner une filière valide pour les classes L2/L3.', 'danger')
+    normalized_filiere = normalize_filiere_for_class(class_name, filiere_name)
+    if not normalized_filiere:
+        flash('Veuillez sélectionner une filière valide pour cette classe.', 'danger')
         return redirect(url_for('admin'))
 
     if not class_name or volet_name not in VOLETS or not question_text or response_type not in {'scale', 'text'}:
@@ -958,13 +1265,13 @@ def add_class_question():
 
     db.session.add(ClassQuestion(
         class_name=class_name,
-        filiere_name=filiere_name,
+        filiere_name=normalized_filiere,
         volet_name=volet_name,
         question_text=question_text,
         response_type=response_type,
     ))
     db.session.commit()
-    log_audit('class_question_added', f'class={class_name}, filiere={filiere_name}, volet={volet_name}, response_type={response_type}, question={question_text[:80]}')
+    log_audit('class_question_added', f'class={class_name}, filiere={normalized_filiere}, volet={volet_name}, response_type={response_type}, question={question_text[:80]}')
     flash('Question de classe ajoutée avec succès.', 'success')
     return redirect(url_for('admin'))
 
@@ -1073,6 +1380,20 @@ def run_schema_updates():
         db.session.execute(text("UPDATE survey_response SET infrastructure_quality = 0 WHERE infrastructure_quality IS NULL"))
         db.session.commit()
 
+    # Normalise les anciennes valeurs de classe de type "L2 I", "L3 IMT", etc.
+    for level in ('L2', 'L3'):
+        for filiere in FILIERES_ITER:
+            legacy_class = f"{level} {filiere}"
+            db.session.execute(
+                text(
+                    "UPDATE survey_response "
+                    "SET class_name = :level, filiere_name = :filiere "
+                    "WHERE class_name = :legacy_class"
+                ),
+                {"level": level, "filiere": filiere, "legacy_class": legacy_class},
+            )
+    db.session.commit()
+
     teacher_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(teacher)"))}
     if 'assigned_subject_name' not in teacher_columns:
         db.session.execute(text("ALTER TABLE teacher ADD COLUMN assigned_subject_name VARCHAR(100)"))
@@ -1090,10 +1411,23 @@ def run_schema_updates():
         db.session.execute(text("UPDATE class_question SET volet_name = 'enseignement' WHERE volet_name IS NULL"))
         db.session.commit()
 
+    matiere_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(matiere)"))}
+    if 'class_name' not in matiere_columns:
+        db.session.execute(text("ALTER TABLE matiere ADD COLUMN class_name VARCHAR(100) DEFAULT 'ALL'"))
+        db.session.execute(text("UPDATE matiere SET class_name = 'ALL' WHERE class_name IS NULL"))
+        db.session.commit()
+
+    matiere_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(matiere)"))}
+    if 'filiere_name' not in matiere_columns:
+        db.session.execute(text("ALTER TABLE matiere ADD COLUMN filiere_name VARCHAR(30) DEFAULT 'ALL'"))
+        db.session.execute(text("UPDATE matiere SET filiere_name = 'ALL' WHERE filiere_name IS NULL"))
+        db.session.commit()
+
 
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         run_schema_updates()
         ensure_default_classes()
+        seed_default_class_questions()
         app.run(host='0.0.0.0', port=5000)
