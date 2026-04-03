@@ -91,30 +91,73 @@ def _pdf_escape(text_value):
     return value.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
 
 
-def build_simple_pdf(title, lines):
-    max_lines = 60
-    lines = [title] + list(lines[:max_lines])
-    content_parts = [
-        "BT",
-        "/F1 12 Tf",
-        "50 800 Td",
-    ]
-    for idx, line in enumerate(lines):
-        if idx == 0:
-            content_parts.append(f"({_pdf_escape(line)}) Tj")
-        else:
-            content_parts.append("0 -14 Td")
-            content_parts.append(f"({_pdf_escape(line)}) Tj")
-    content_parts.append("ET")
-    content = "\n".join(content_parts).encode('latin-1', errors='replace')
+def _format_row(columns, widths):
+    padded = []
+    for idx, col in enumerate(columns):
+        width = widths[idx]
+        text = str(col or '')
+        if len(text) > width:
+            text = text[:max(0, width - 1)] + '…'
+        padded.append(text.ljust(width))
+    return " | ".join(padded)
+
+
+def build_table_pdf(title, headers, rows, subtitle=''):
+    page_lines = 46
+    widths = [14, 14, 12, 10, 18, 10]
+    if len(headers) == 8:
+        widths = [12, 16, 10, 8, 15, 8, 16, 16]
+
+    header_line = _format_row(headers, widths)
+    separator = '-' * len(header_line)
+    body_lines = [_format_row(row, widths) for row in rows]
+
+    pages = []
+    for i in range(0, max(1, len(body_lines)), page_lines):
+        chunk = body_lines[i:i + page_lines]
+        lines = [title]
+        if subtitle:
+            lines.append(subtitle)
+        lines.append('')
+        lines.append(header_line)
+        lines.append(separator)
+        lines.extend(chunk if chunk else ['Aucune donnée'])
+        pages.append(lines)
 
     objects = []
     objects.append(b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj")
-    objects.append(b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj")
-    objects.append(b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj")
-    objects.append(b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj")
+
+    page_count = len(pages)
+    first_page_obj = 3
+    kids_refs = " ".join(f"{first_page_obj + i * 2} 0 R" for i in range(page_count))
+    objects.append(f"2 0 obj << /Type /Pages /Kids [{kids_refs}] /Count {page_count} >> endobj".encode('ascii'))
+
+    for i, lines in enumerate(pages):
+        page_obj_id = first_page_obj + i * 2
+        content_obj_id = page_obj_id + 1
+        content_parts = ["BT", "/F1 10 Tf", "40 810 Td"]
+        for idx, line in enumerate(lines):
+            if idx == 0:
+                content_parts.append(f"({_pdf_escape(line)}) Tj")
+            else:
+                content_parts.append("0 -15 Td")
+                content_parts.append(f"({_pdf_escape(line)}) Tj")
+        content_parts.append("ET")
+        content = "\n".join(content_parts).encode('latin-1', errors='replace')
+        objects.append(
+            f"{page_obj_id} 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+            f"/Resources << /Font << /F1 {first_page_obj + page_count * 2} 0 R >> >> "
+            f"/Contents {content_obj_id} 0 R >> endobj".encode('ascii')
+        )
+        objects.append(
+            f"{content_obj_id} 0 obj << /Length {len(content)} >> stream\n".encode('ascii')
+            + content
+            + b"\nendstream endobj"
+        )
+
+    font_obj_id = first_page_obj + page_count * 2
     objects.append(
-        b"5 0 obj << /Length " + str(len(content)).encode('ascii') + b" >> stream\n" + content + b"\nendstream endobj"
+        f"{font_obj_id} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Courier >> endobj".encode('ascii')
     )
 
     pdf = bytearray(b"%PDF-1.4\n")
@@ -127,9 +170,7 @@ def build_simple_pdf(title, lines):
     pdf.extend(b"0000000000 65535 f \n")
     for offset in offsets[1:]:
         pdf.extend(f"{offset:010d} 00000 n \n".encode('ascii'))
-    pdf.extend(
-        f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF".encode('ascii')
-    )
+    pdf.extend(f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF".encode('ascii'))
     return bytes(pdf)
 
 
@@ -672,15 +713,23 @@ def export_tokens_pdf():
 
     tokens = query.order_by(EvaluationToken.created_at.desc()).all()
     campaigns_by_id = {c.id: c.name for c in EvaluationCampaign.query.all()}
-    lines = []
+    rows = []
     for token in tokens:
-        lines.append(
-            f"{token.token} | {campaigns_by_id.get(token.campaign_id, 'Sans campagne')} | "
-            f"{token.filiere_name} | {token.class_name} | {token.subject_name} | "
-            f"{'utilisé' if token.is_used else 'disponible'}"
-        )
+        rows.append([
+            token.token,
+            campaigns_by_id.get(token.campaign_id, 'Sans campagne'),
+            token.filiere_name,
+            token.class_name,
+            token.subject_name,
+            'utilisé' if token.is_used else 'disponible',
+        ])
 
-    pdf_bytes = build_simple_pdf("Export des tokens", lines)
+    pdf_bytes = build_table_pdf(
+        title="Export des tokens générés",
+        subtitle=f"Filtres: campagne={campaign_id or 'toutes'} | non_utilisés={only_unused}",
+        headers=['Token', 'Campagne', 'Filière', 'Classe', 'Matière', 'Statut'],
+        rows=rows,
+    )
     suffix = f"_campaign_{campaign_id}" if campaign_id else ""
     filename = f"tokens_export{suffix}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
     return Response(
@@ -1039,13 +1088,25 @@ def dashboard_export_pdf():
     subject_name = request.args.get('matiere', '').strip() or None
 
     responses = build_dashboard_query(filiere_name, classe_name, subject_name).all()
-    lines = [
-        f"{r.filiere_name} | {r.class_name} | {r.subject_name} | "
-        f"satisfaction={r.overall_satisfaction} | organisation={r.schedule_organization} | "
-        f"infrastructures={r.infrastructure_quality}"
+    rows = [
+        [
+            r.filiere_name,
+            r.class_name,
+            r.subject_name,
+            r.overall_satisfaction,
+            r.schedule_organization,
+            r.infrastructure_quality,
+            r.professor_motivation,
+            r.tools_methodology,
+        ]
         for r in responses
     ]
-    pdf_bytes = build_simple_pdf("Export dashboard", lines)
+    pdf_bytes = build_table_pdf(
+        title="Export dashboard décisionnel",
+        subtitle=f"Filtres: filière={filiere_name or 'toutes'} | classe={classe_name or 'toutes'} | matière={subject_name or 'toutes'}",
+        headers=['Filière', 'Classe', 'Matière', 'Satisf.', 'Organ.', 'Infra.', 'Motiv.', 'Métho.'],
+        rows=rows,
+    )
     filename = f"dashboard_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
     return Response(
         pdf_bytes,
