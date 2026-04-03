@@ -45,6 +45,8 @@
 
             <div class="mt-4">
                 <a class="text-red-700 underline" href="{{ url_for('dashboard_export_csv', filiere=selected.filiere, classe=selected.classe, matiere=selected.matiere) }}">Télécharger l'export CSV</a>
+                <span class="mx-2 text-gray-400">|</span>
+                <a class="text-red-700 underline" href="{{ url_for('dashboard_export_pdf', filiere=selected.filiere, classe=selected.classe, matiere=selected.matiere) }}">Télécharger l'export PDF</a>
             </div>
         </div>
 

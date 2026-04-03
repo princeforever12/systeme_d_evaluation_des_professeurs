@@ -86,6 +86,53 @@ DEFAULT_QUESTION_BANK = {
 }
 
 
+def _pdf_escape(text_value):
+    value = str(text_value or '')
+    return value.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+
+
+def build_simple_pdf(title, lines):
+    max_lines = 60
+    lines = [title] + list(lines[:max_lines])
+    content_parts = [
+        "BT",
+        "/F1 12 Tf",
+        "50 800 Td",
+    ]
+    for idx, line in enumerate(lines):
+        if idx == 0:
+            content_parts.append(f"({_pdf_escape(line)}) Tj")
+        else:
+            content_parts.append("0 -14 Td")
+            content_parts.append(f"({_pdf_escape(line)}) Tj")
+    content_parts.append("ET")
+    content = "\n".join(content_parts).encode('latin-1', errors='replace')
+
+    objects = []
+    objects.append(b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj")
+    objects.append(b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj")
+    objects.append(b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj")
+    objects.append(b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj")
+    objects.append(
+        b"5 0 obj << /Length " + str(len(content)).encode('ascii') + b" >> stream\n" + content + b"\nendstream endobj"
+    )
+
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for obj in objects:
+        offsets.append(len(pdf))
+        pdf.extend(obj + b"\n")
+    xref_pos = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects) + 1}\n".encode('ascii'))
+    pdf.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode('ascii'))
+    pdf.extend(
+        f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF".encode('ascii')
+    )
+    return bytes(pdf)
+
+
 def is_l1_class(class_name):
     if not class_name:
         return False
@@ -609,6 +656,40 @@ def export_tokens_csv():
     )
 
 
+@app.route('/tokens/export.pdf', methods=['GET'])
+def export_tokens_pdf():
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    campaign_id = request.args.get('campaign_id', type=int)
+    only_unused = request.args.get('only_unused', '1').lower() in {'1', 'true', 'yes', 'on'}
+
+    query = EvaluationToken.query
+    if campaign_id:
+        query = query.filter_by(campaign_id=campaign_id)
+    if only_unused:
+        query = query.filter_by(is_used=False)
+
+    tokens = query.order_by(EvaluationToken.created_at.desc()).all()
+    campaigns_by_id = {c.id: c.name for c in EvaluationCampaign.query.all()}
+    lines = []
+    for token in tokens:
+        lines.append(
+            f"{token.token} | {campaigns_by_id.get(token.campaign_id, 'Sans campagne')} | "
+            f"{token.filiere_name} | {token.class_name} | {token.subject_name} | "
+            f"{'utilisé' if token.is_used else 'disponible'}"
+        )
+
+    pdf_bytes = build_simple_pdf("Export des tokens", lines)
+    suffix = f"_campaign_{campaign_id}" if campaign_id else ""
+    filename = f"tokens_export{suffix}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename={filename}'},
+    )
+
+
 @app.route('/change_credentials', methods=['GET', 'POST'])
 def change_credentials():
     global ADMIN_USERNAME, ADMIN_PASSWORD_HASH
@@ -944,6 +1025,31 @@ def dashboard_export_csv():
     return Response(
         csv_data,
         mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={filename}'},
+    )
+
+
+@app.route('/dashboard/export.pdf', methods=['GET'])
+def dashboard_export_pdf():
+    if not ensure_admin_session():
+        return redirect(url_for('login'))
+
+    filiere_name = request.args.get('filiere', '').strip() or None
+    classe_name = request.args.get('classe', '').strip() or None
+    subject_name = request.args.get('matiere', '').strip() or None
+
+    responses = build_dashboard_query(filiere_name, classe_name, subject_name).all()
+    lines = [
+        f"{r.filiere_name} | {r.class_name} | {r.subject_name} | "
+        f"satisfaction={r.overall_satisfaction} | organisation={r.schedule_organization} | "
+        f"infrastructures={r.infrastructure_quality}"
+        for r in responses
+    ]
+    pdf_bytes = build_simple_pdf("Export dashboard", lines)
+    filename = f"dashboard_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype='application/pdf',
         headers={'Content-Disposition': f'attachment; filename={filename}'},
     )
 

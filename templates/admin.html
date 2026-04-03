@@ -88,7 +88,10 @@
                             <input type="checkbox" name="only_unused" value="1" checked>
                             Exporter seulement les tokens non utilisés
                         </label>
-                        <button class="bg-slate-700 text-white px-4 py-2 rounded">Télécharger CSV</button>
+                        <div class="flex gap-2">
+                            <button class="bg-slate-700 text-white px-4 py-2 rounded" formaction="{{ url_for('export_tokens_csv') }}">Télécharger CSV</button>
+                            <button class="bg-slate-900 text-white px-4 py-2 rounded" formaction="{{ url_for('export_tokens_pdf') }}">Télécharger PDF</button>
+                        </div>
                     </form>
                 </div>
             </div>
