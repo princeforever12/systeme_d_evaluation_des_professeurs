@@ -84,11 +84,39 @@ DEFAULT_QUESTION_BANK = {
         ('Quelle priorité d’amélioration recommandez-vous ?', 'text'),
     ],
 }
+PDF_LOGO_PATH = os.path.join('static', 'assets', 'utt_loko_logo.jpg')
 
 
 def _pdf_escape(text_value):
     value = str(text_value or '')
     return value.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+
+
+def _get_jpeg_size(data):
+    if len(data) < 4 or data[0:2] != b'\xff\xd8':
+        return None
+    i = 2
+    while i < len(data) - 1:
+        if data[i] != 0xFF:
+            i += 1
+            continue
+        marker = data[i + 1]
+        i += 2
+        if marker in (0xD8, 0xD9):
+            continue
+        if i + 2 > len(data):
+            break
+        segment_length = int.from_bytes(data[i:i + 2], 'big')
+        if segment_length < 2 or i + segment_length > len(data):
+            break
+        if marker in (0xC0, 0xC1, 0xC2, 0xC3):
+            if i + 7 > len(data):
+                break
+            height = int.from_bytes(data[i + 3:i + 5], 'big')
+            width = int.from_bytes(data[i + 5:i + 7], 'big')
+            return width, height
+        i += segment_length
+    return None
 
 
 def _format_row(columns, widths):
@@ -102,7 +130,7 @@ def _format_row(columns, widths):
     return " | ".join(padded)
 
 
-def build_table_pdf(title, headers, rows, subtitle=''):
+def build_table_pdf(title, headers, rows, subtitle='', logo_path=None):
     page_lines = 46
     widths = [14, 14, 12, 10, 18, 10]
     if len(headers) == 8:
@@ -124,6 +152,16 @@ def build_table_pdf(title, headers, rows, subtitle=''):
         lines.extend(chunk if chunk else ['Aucune donnée'])
         pages.append(lines)
 
+    logo_data = None
+    logo_size = None
+    if logo_path and os.path.exists(logo_path):
+        with open(logo_path, 'rb') as logo_file:
+            candidate = logo_file.read()
+        size = _get_jpeg_size(candidate)
+        if size:
+            logo_data = candidate
+            logo_size = size
+
     objects = []
     objects.append(b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj")
 
@@ -132,10 +170,30 @@ def build_table_pdf(title, headers, rows, subtitle=''):
     kids_refs = " ".join(f"{first_page_obj + i * 2} 0 R" for i in range(page_count))
     objects.append(f"2 0 obj << /Type /Pages /Kids [{kids_refs}] /Count {page_count} >> endobj".encode('ascii'))
 
+    font_obj_id = first_page_obj + page_count * 2
+    image_obj_id = font_obj_id + 1 if logo_data else None
+
     for i, lines in enumerate(pages):
         page_obj_id = first_page_obj + i * 2
         content_obj_id = page_obj_id + 1
-        content_parts = ["BT", "/F1 10 Tf", "40 810 Td"]
+        start_y = 810
+        content_parts = []
+        if logo_data and logo_size:
+            width, height = logo_size
+            max_width = 140
+            max_height = 55
+            scale = min(max_width / width, max_height / height)
+            draw_w = width * scale
+            draw_h = height * scale
+            content_parts.extend([
+                "q",
+                f"{draw_w:.2f} 0 0 {draw_h:.2f} 40 770 cm",
+                "/Im0 Do",
+                "Q",
+            ])
+            start_y = 740
+
+        content_parts.extend(["BT", "/F1 10 Tf", f"40 {start_y} Td"])
         for idx, line in enumerate(lines):
             if idx == 0:
                 content_parts.append(f"({_pdf_escape(line)}) Tj")
@@ -144,9 +202,10 @@ def build_table_pdf(title, headers, rows, subtitle=''):
                 content_parts.append(f"({_pdf_escape(line)}) Tj")
         content_parts.append("ET")
         content = "\n".join(content_parts).encode('latin-1', errors='replace')
+        xobject_part = f" /XObject << /Im0 {image_obj_id} 0 R >>" if image_obj_id else ""
         objects.append(
             f"{page_obj_id} 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-            f"/Resources << /Font << /F1 {first_page_obj + page_count * 2} 0 R >> >> "
+            f"/Resources << /Font << /F1 {font_obj_id} 0 R >>{xobject_part} >> "
             f"/Contents {content_obj_id} 0 R >> endobj".encode('ascii')
         )
         objects.append(
@@ -155,10 +214,17 @@ def build_table_pdf(title, headers, rows, subtitle=''):
             + b"\nendstream endobj"
         )
 
-    font_obj_id = first_page_obj + page_count * 2
     objects.append(
         f"{font_obj_id} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Courier >> endobj".encode('ascii')
     )
+    if logo_data and logo_size:
+        width, height = logo_size
+        objects.append(
+            f"{image_obj_id} 0 obj << /Type /XObject /Subtype /Image /Width {width} /Height {height} "
+            f"/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {len(logo_data)} >> stream\n".encode('ascii')
+            + logo_data
+            + b"\nendstream endobj"
+        )
 
     pdf = bytearray(b"%PDF-1.4\n")
     offsets = [0]
@@ -729,6 +795,7 @@ def export_tokens_pdf():
         subtitle=f"Filtres: campagne={campaign_id or 'toutes'} | non_utilisés={only_unused}",
         headers=['Token', 'Campagne', 'Filière', 'Classe', 'Matière', 'Statut'],
         rows=rows,
+        logo_path=PDF_LOGO_PATH,
     )
     suffix = f"_campaign_{campaign_id}" if campaign_id else ""
     filename = f"tokens_export{suffix}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
@@ -1106,6 +1173,7 @@ def dashboard_export_pdf():
         subtitle=f"Filtres: filière={filiere_name or 'toutes'} | classe={classe_name or 'toutes'} | matière={subject_name or 'toutes'}",
         headers=['Filière', 'Classe', 'Matière', 'Satisf.', 'Organ.', 'Infra.', 'Motiv.', 'Métho.'],
         rows=rows,
+        logo_path=PDF_LOGO_PATH,
     )
     filename = f"dashboard_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
     return Response(
