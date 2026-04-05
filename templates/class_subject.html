@@ -31,7 +31,7 @@
                         {% endif %}
                     {% endfor %}
                 </select>
-                <p class="text-xs text-gray-500 mt-1">En L1, aucune filière n'est demandée. Les filières I/IMT/EEA commencent en L2.</p>
+                <p class="text-xs text-gray-500 mt-1">En L1, la filière est automatiquement « L1 (sans filière) ». En L2/L3, vous pouvez choisir I/IMT/EEA ou Tronc commun.</p>
             </div>
 
             <div>
@@ -50,7 +50,13 @@
                 <select name="matiere" id="matiere" required class="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-500">
                     <option value="">Sélectionner une matière</option>
                     {% for matiere in matieres %}
-                        <option value="{{ matiere.id }}">{{ matiere.nom }}</option>
+                        <option
+                            value="{{ matiere.id }}"
+                            data-class-name="{{ matiere.class_name }}"
+                            data-filiere-name="{{ matiere.filiere_name }}"
+                        >
+                            {{ matiere.nom }} ({{ matiere.class_name }} / {{ matiere.filiere_name }})
+                        </option>
                     {% endfor %}
                 </select>
             </div>
@@ -72,6 +78,7 @@
     <script>
         const classeSelect = document.getElementById('classe');
         const filiereSelect = document.getElementById('filiere');
+        const matiereSelect = document.getElementById('matiere');
 
         function updateFiliereRequirement() {
             const selectedOption = classeSelect.options[classeSelect.selectedIndex];
@@ -79,11 +86,37 @@
             filiereSelect.required = !isL1;
             filiereSelect.disabled = isL1;
             if (isL1) {
-                filiereSelect.value = '';
+                filiereSelect.value = 'L1 (sans filière)';
+            }
+            updateMatiereOptions();
+        }
+
+        function updateMatiereOptions() {
+            const selectedClassName = classeSelect.options[classeSelect.selectedIndex]?.text || '';
+            const selectedFiliere = filiereSelect.value;
+            const visibleValues = [];
+
+            for (const option of matiereSelect.options) {
+                if (!option.value) {
+                    option.hidden = false;
+                    continue;
+                }
+                const optionClass = option.dataset.className;
+                const optionFiliere = option.dataset.filiereName;
+                const classMatch = !selectedClassName || optionClass === selectedClassName || optionClass === 'ALL';
+                const filiereMatch = !selectedFiliere || optionFiliere === selectedFiliere || optionFiliere === 'Tronc commun' || optionFiliere === 'ALL';
+                const visible = classMatch && filiereMatch;
+                option.hidden = !visible;
+                if (visible) visibleValues.push(option.value);
+            }
+
+            if (!visibleValues.includes(matiereSelect.value)) {
+                matiereSelect.value = '';
             }
         }
 
         classeSelect.addEventListener('change', updateFiliereRequirement);
+        filiereSelect.addEventListener('change', updateMatiereOptions);
         updateFiliereRequirement();
     </script>
 </body>
