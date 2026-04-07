@@ -688,7 +688,10 @@ def generate_tokens():
         flash('Campagne invalide.', 'danger')
         return redirect(url_for('admin'))
 
-    subject = Matiere.query.filter_by(nom=subject_name, class_name=classe_name).filter(
+    subject = Matiere.query.filter(
+        Matiere.nom == subject_name,
+        Matiere.class_name.in_([classe_name, CAMPAIGN_GLOBAL_LABEL]),
+    ).filter(
         Matiere.filiere_name.in_([normalized_filiere, TRONC_COMMUN_LABEL, 'ALL'])
     ).first()
     if not subject:
