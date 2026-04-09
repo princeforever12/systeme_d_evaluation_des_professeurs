@@ -323,7 +323,7 @@
                     <input type="text" name="teacher_username" placeholder="Nom d'utilisateur" required class="w-full p-2 border rounded">
                     <input type="password" name="teacher_password" placeholder="Mot de passe" required class="w-full p-2 border rounded">
                     <select name="teacher_subject_name" class="w-full p-2 border rounded">
-                        <option value="">Toutes les matières (non restreint)</option>
+                        <option value="ALL">Toutes les matières (rôle global)</option>
                         {% for matiere in matieres %}
                             <option value="{{ matiere.nom }}">{{ matiere.nom }}</option>
                         {% endfor %}

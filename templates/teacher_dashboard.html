@@ -15,24 +15,19 @@
 
         <div class="bg-white p-6 rounded-lg shadow mb-6">
             <form method="GET" action="{{ url_for('teacher_dashboard') }}" class="grid md:grid-cols-4 gap-4">
-                <select name="classe" id="teacher_class" class="p-2 border rounded">
-                    <option value="">Toutes les classes</option>
-                    {% for classe in classes %}
-                        <option value="{{ classe.nom }}" {% if selected.classe == classe.nom %}selected{% endif %}>{{ classe.nom }}</option>
-                    {% endfor %}
-                </select>
-                <select name="filiere" id="teacher_filiere" class="p-2 border rounded">
-                    <option value="">Toutes les filières</option>
-                    {% for filiere in filieres %}
-                        <option value="{{ filiere }}" {% if selected.filiere == filiere %}selected{% endif %}>{{ filiere }}</option>
-                    {% endfor %}
-                </select>
-                {% if teacher_subject_name %}
-                    <input type="hidden" name="matiere" value="{{ teacher_subject_name }}">
-                    <div class="p-2 border rounded bg-red-50 text-red-700 text-sm flex items-center">
-                        Matière assignée : <strong class="ml-1">{{ teacher_subject_name }}</strong>
-                    </div>
-                {% else %}
+                {% if is_all_subject_role %}
+                    <select name="classe" id="teacher_class" class="p-2 border rounded">
+                        <option value="">Toutes les classes</option>
+                        {% for classe in classes %}
+                            <option value="{{ classe.nom }}" {% if selected.classe == classe.nom %}selected{% endif %}>{{ classe.nom }}</option>
+                        {% endfor %}
+                    </select>
+                    <select name="filiere" id="teacher_filiere" class="p-2 border rounded">
+                        <option value="">Toutes les filières</option>
+                        {% for filiere in filieres %}
+                            <option value="{{ filiere }}" {% if selected.filiere == filiere %}selected{% endif %}>{{ filiere }}</option>
+                        {% endfor %}
+                    </select>
                     <select name="matiere" id="teacher_matiere" class="p-2 border rounded">
                         <option value="">Toutes les matières</option>
                         {% for matiere in matieres %}
@@ -46,8 +41,13 @@
                             </option>
                         {% endfor %}
                     </select>
+                    <button class="bg-red-700 text-white rounded px-4 py-2">Filtrer</button>
+                {% else %}
+                    <div class="md:col-span-3 p-2 border rounded bg-red-50 text-red-700 text-sm flex items-center">
+                        Matière assignée : <strong class="ml-1">{{ teacher_subject_name }}</strong>
+                    </div>
+                    <input type="hidden" name="matiere" value="{{ teacher_subject_name }}">
                 {% endif %}
-                <button class="bg-red-700 text-white rounded px-4 py-2">Filtrer</button>
             </form>
         </div>
 
@@ -72,6 +72,7 @@
             {% endif %}
         </div>
     </div>
+    {% if is_all_subject_role %}
     <script>
         const teacherClassSelect = document.getElementById('teacher_class');
         const teacherFiliereSelect = document.getElementById('teacher_filiere');
@@ -110,5 +111,6 @@
         teacherFiliereSelect?.addEventListener('change', updateTeacherFilters);
         updateTeacherFilters();
     </script>
+    {% endif %}
 </body>
 </html>
