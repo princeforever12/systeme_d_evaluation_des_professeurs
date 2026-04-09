@@ -1000,7 +1000,14 @@ def teacher_dashboard():
     classe_name = request.args.get('classe', '').strip() or None
     requested_subject_name = request.args.get('matiere', '').strip() or None
     teacher_subject_name = session.get('teacher_subject_name')
-    subject_name = teacher_subject_name or requested_subject_name
+    is_all_subject_role = (not teacher_subject_name) or teacher_subject_name.strip().upper() == 'ALL'
+
+    if not is_all_subject_role:
+        filiere_name = None
+        classe_name = None
+        subject_name = teacher_subject_name
+    else:
+        subject_name = requested_subject_name
 
     responses = build_dashboard_query(filiere_name, classe_name, subject_name).all()
     total = len(responses)
@@ -1029,6 +1036,7 @@ def teacher_dashboard():
         classes=classes,
         matieres=matieres,
         teacher_subject_name=teacher_subject_name,
+        is_all_subject_role=is_all_subject_role,
         selected={
             'filiere': filiere_name or '',
             'classe': classe_name or '',
@@ -1452,7 +1460,8 @@ def add_teacher():
         flash('Ce nom d\'utilisateur enseignant existe déjà.', 'warning')
         return redirect(url_for('admin'))
 
-    if assigned_subject_name and not Matiere.query.filter_by(nom=assigned_subject_name).first():
+    is_all_subject_role = (not assigned_subject_name) or assigned_subject_name.upper() == 'ALL'
+    if (not is_all_subject_role) and not Matiere.query.filter_by(nom=assigned_subject_name).first():
         flash('La matière associée à l\'enseignant est invalide.', 'danger')
         return redirect(url_for('admin'))
 
@@ -1460,7 +1469,7 @@ def add_teacher():
         username=username,
         password_hash=generate_password_hash(password),
         full_name=full_name or None,
-        assigned_subject_name=assigned_subject_name or None,
+        assigned_subject_name=None if is_all_subject_role else assigned_subject_name,
         is_active=True,
     )
     db.session.add(teacher)
