@@ -24,22 +24,17 @@
         .volet-actions { display:flex; justify-content:space-between; margin-top:14px; gap:10px; }
         .btn-secondary { background:#e5e7eb; color:#111827; padding:10px 14px; border:none; border-radius:5px; cursor:pointer; }
         .btn-primary { background:#b91c1c; color:white; padding:10px 14px; border:none; border-radius:5px; cursor:pointer; }
+        .popup-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:50; }
+        .popup-overlay.show { display:flex; }
+        .popup-card { background:#fff; width:min(92vw, 420px); border-radius:10px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.25); border:1px solid #fecaca; }
+        .popup-title { margin:0 0 8px; color:#991b1b; font-weight:700; }
+        .popup-message { margin:0 0 12px; color:#7f1d1d; }
     </style>
 </head>
 <body>
     <div class="container">
         <form method="POST" class="survey-form">
             <h1>Questionnaire d'évaluation</h1>
-
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    <div class="form-group">
-                        {% for category, message in messages %}
-                            <p style="margin:6px 0; padding:8px; border-radius:6px; background:{{ '#fee2e2' if category=='danger' else '#fef3c7' }}; color:#7f1d1d;">{{ message }}</p>
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            {% endwith %}
 
             {% if active_questionnaire %}
                 <div class="form-group" style="background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:12px;">
@@ -68,13 +63,13 @@
                                         <ul class="choice-list">
                                             {% for i in range(11) %}
                                                 <li>
-                                                    <input type="radio" id="class_question_{{ question.id }}_{{ i }}" name="class_question_{{ question.id }}" value="{{ i }}" style="display:none;">
-                                                    <button type="button" class="choice-button" onclick="selectChoice('class_question_{{ question.id }}', 'class_question_{{ question.id }}_{{ i }}')">{{ i }}</button>
+                                                    <input type="radio" id="class_question_{{ question.id }}_{{ i }}" name="class_question_{{ question.id }}" value="{{ i }}" style="display:none;" {% if submitted_answers.get('class_question_' ~ question.id|string) == i|string %}checked{% endif %}>
+                                                    <button type="button" class="choice-button {% if submitted_answers.get('class_question_' ~ question.id|string) == i|string %}selected{% endif %}" onclick="selectChoice('class_question_{{ question.id }}', 'class_question_{{ question.id }}_{{ i }}')">{{ i }}</button>
                                                 </li>
                                             {% endfor %}
                                         </ul>
                                     {% else %}
-                                        <textarea name="class_question_{{ question.id }}" class="textarea" rows="3" placeholder="Saisissez votre avis ici..."></textarea>
+                                        <textarea name="class_question_{{ question.id }}" class="textarea" rows="3" placeholder="Saisissez votre avis ici...">{{ submitted_answers.get('class_question_' ~ question.id|string, '') }}</textarea>
                                     {% endif %}
                                 </div>
                             {% endfor %}
@@ -94,7 +89,7 @@
 
             <div class="form-group">
                 <label for="feedback">Commentaire libre (optionnel)</label>
-                <textarea id="feedback" name="feedback" class="textarea" rows="4" placeholder="Votre avis global..."></textarea>
+                <textarea id="feedback" name="feedback" class="textarea" rows="4" placeholder="Votre avis global...">{{ submitted_answers.get('feedback', '') }}</textarea>
             </div>
 
             <div class="form-group">
@@ -102,6 +97,18 @@
             </div>
         </form>
     </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div id="validationPopup" class="popup-overlay show" role="dialog" aria-modal="true" aria-labelledby="popupTitle">
+                <div class="popup-card">
+                    <p id="popupTitle" class="popup-title">Formulaire incomplet</p>
+                    <p class="popup-message">{{ messages[0][1] }}</p>
+                    <button type="button" class="btn-primary" onclick="closeValidationPopup()">Compris</button>
+                </div>
+            </div>
+        {% endif %}
+    {% endwith %}
 
     <script>
         let currentStep = 0;
@@ -132,6 +139,17 @@
                 }
             });
         }
+
+        function closeValidationPopup() {
+            const popup = document.getElementById('validationPopup');
+            if (popup) popup.classList.remove('show');
+        }
+
+        document.querySelectorAll('input[type=\"radio\"]').forEach((input) => {
+            if (input.checked) {
+                input.parentElement.querySelector('button')?.classList.add('selected');
+            }
+        });
 
         showStep(0);
     </script>

@@ -22,6 +22,17 @@
 
         <form method="POST" class="space-y-5">
             <div>
+                <label for="classe" class="block text-gray-700 mb-2">Classe :</label>
+                <select name="classe" id="classe" required class="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-500">
+                    <option value="">Sélectionner une classe</option>
+                    {% for classe in classes %}
+                        {% set cname = classe.nom|lower|replace(' ', '') %}
+                        <option value="{{ classe.id }}" data-is-l1="{{ 'true' if ('l1' in cname or 'licence1' in cname or 'license1' in cname) else 'false' }}">{{ classe.nom }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
                 <label for="filiere" class="block text-gray-700 mb-2">Filière (L2 et + seulement) :</label>
                 <select name="filiere" id="filiere" class="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-500">
                     <option value="">Aucune (obligatoire seulement en L2 et +)</option>
@@ -32,17 +43,6 @@
                     {% endfor %}
                 </select>
                 <p class="text-xs text-gray-500 mt-1">En L1, la filière est automatiquement « L1 (sans filière) ». En L2/L3, vous pouvez choisir I/IMT/EEA ou Tronc commun.</p>
-            </div>
-
-            <div>
-                <label for="classe" class="block text-gray-700 mb-2">Classe :</label>
-                <select name="classe" id="classe" required class="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-500">
-                    <option value="">Sélectionner une classe</option>
-                    {% for classe in classes %}
-                        {% set cname = classe.nom|lower|replace(' ', '') %}
-                        <option value="{{ classe.id }}" data-is-l1="{{ 'true' if ('l1' in cname or 'licence1' in cname or 'license1' in cname) else 'false' }}">{{ classe.nom }}</option>
-                    {% endfor %}
-                </select>
             </div>
 
             <div>
