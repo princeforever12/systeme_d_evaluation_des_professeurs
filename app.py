@@ -5,6 +5,7 @@ import csv
 import io
 import os
 import re
+import unicodedata
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -84,11 +85,24 @@ DEFAULT_QUESTION_BANK = {
         ('Quelle priorité d’amélioration recommandez-vous ?', 'text'),
     ],
 }
-PDF_LOGO_PATH = os.path.join('static', 'assets', 'utt_loko_logo.jpg')
+PDF_LOGO_CANDIDATES = [
+    os.getenv('SCHOOL_LOGO_PATH', '').strip(),
+    os.path.join('static', 'assets', 'utt_loko_logo.jpg'),
+    os.path.join('static', 'assets', 'ecole_logo.jpg'),
+    os.path.join('static', 'assets', 'logo.jpg'),
+]
+
+
+def get_pdf_logo_path():
+    for candidate in PDF_LOGO_CANDIDATES:
+        if candidate and os.path.exists(candidate):
+            return candidate
+    return None
 
 
 def _pdf_escape(text_value):
-    value = str(text_value or '')
+    raw_value = str(text_value or '')
+    value = unicodedata.normalize('NFKD', raw_value).encode('ascii', 'ignore').decode('ascii')
     return value.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
 
 
@@ -119,38 +133,30 @@ def _get_jpeg_size(data):
     return None
 
 
-def _format_row(columns, widths):
-    padded = []
-    for idx, col in enumerate(columns):
-        width = widths[idx]
-        text = str(col or '')
-        if len(text) > width:
-            text = text[:max(0, width - 1)] + '…'
-        padded.append(text.ljust(width))
-    return " | ".join(padded)
+def _compute_table_widths(headers, rows, min_width=8, max_width=34):
+    column_count = max(1, len(headers))
+    widths = [min(max(len(_pdf_escape(header)) + 2, min_width), max_width) for header in headers]
+    for row in rows:
+        for idx in range(column_count):
+            cell = _pdf_escape(row[idx] if idx < len(row) else '')
+            widths[idx] = min(max(widths[idx], len(cell) + 2), max_width)
+    return widths
 
 
 def build_table_pdf(title, headers, rows, subtitle='', logo_path=None):
-    page_lines = 46
-    widths = [14, 14, 12, 10, 18, 10]
-    if len(headers) == 8:
-        widths = [12, 16, 10, 8, 15, 8, 16, 16]
+    page_width = 595
+    page_height = 842
+    margin = 36
+    table_width = page_width - (2 * margin)
+    row_height = 20
+    header_height = 24
 
-    header_line = _format_row(headers, widths)
-    separator = '-' * len(header_line)
-    body_lines = [_format_row(row, widths) for row in rows]
+    widths = _compute_table_widths(headers, rows)
+    total_units = sum(widths) or 1
+    col_widths = [(w / total_units) * table_width for w in widths]
 
-    pages = []
-    for i in range(0, max(1, len(body_lines)), page_lines):
-        chunk = body_lines[i:i + page_lines]
-        lines = [title]
-        if subtitle:
-            lines.append(subtitle)
-        lines.append('')
-        lines.append(header_line)
-        lines.append(separator)
-        lines.extend(chunk if chunk else ['Aucune donnée'])
-        pages.append(lines)
+    logo_space = 0
+    title_y = page_height - margin
 
     logo_data = None
     logo_size = None
@@ -161,6 +167,28 @@ def build_table_pdf(title, headers, rows, subtitle='', logo_path=None):
         if size:
             logo_data = candidate
             logo_size = size
+            logo_space = 70
+            title_y -= logo_space
+
+    def truncate_cell(text, col_width):
+        cleaned = _pdf_escape(text)
+        max_chars = max(3, int((col_width - 8) / 5.5))
+        if len(cleaned) > max_chars:
+            return cleaned[:max(0, max_chars - 3)] + "..."
+        return cleaned
+
+    rendered_rows = [
+        [truncate_cell(cell, col_widths[idx]) for idx, cell in enumerate(row)]
+        for row in rows
+    ] if rows else [["Aucune donnee disponible"] + [''] * (len(headers) - 1)]
+
+    table_top = title_y - 52
+    available_height = table_top - margin
+    rows_per_page = max(8, int((available_height - header_height) / row_height))
+    pages = [
+        rendered_rows[i:i + rows_per_page]
+        for i in range(0, max(1, len(rendered_rows)), rows_per_page)
+    ]
 
     objects = []
     objects.append(b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj")
@@ -170,13 +198,13 @@ def build_table_pdf(title, headers, rows, subtitle='', logo_path=None):
     kids_refs = " ".join(f"{first_page_obj + i * 2} 0 R" for i in range(page_count))
     objects.append(f"2 0 obj << /Type /Pages /Kids [{kids_refs}] /Count {page_count} >> endobj".encode('ascii'))
 
-    font_obj_id = first_page_obj + page_count * 2
-    image_obj_id = font_obj_id + 1 if logo_data else None
+    regular_font_obj_id = first_page_obj + page_count * 2
+    bold_font_obj_id = regular_font_obj_id + 1
+    image_obj_id = bold_font_obj_id + 1 if logo_data else None
 
-    for i, lines in enumerate(pages):
+    for i, page_rows in enumerate(pages):
         page_obj_id = first_page_obj + i * 2
         content_obj_id = page_obj_id + 1
-        start_y = 810
         content_parts = []
         if logo_data and logo_size:
             width, height = logo_size
@@ -191,21 +219,81 @@ def build_table_pdf(title, headers, rows, subtitle='', logo_path=None):
                 "/Im0 Do",
                 "Q",
             ])
-            start_y = 740
 
-        content_parts.extend(["BT", "/F1 10 Tf", f"40 {start_y} Td"])
-        for idx, line in enumerate(lines):
-            if idx == 0:
-                content_parts.append(f"({_pdf_escape(line)}) Tj")
-            else:
-                content_parts.append("0 -15 Td")
-                content_parts.append(f"({_pdf_escape(line)}) Tj")
-        content_parts.append("ET")
+        current_title_y = title_y + 20
+        content_parts.extend([
+            "BT",
+            "/F2 15 Tf",
+            f"{margin} {current_title_y:.2f} Td",
+            f"({_pdf_escape(title)}) Tj",
+            "ET",
+        ])
+        if subtitle:
+            content_parts.extend([
+                "BT",
+                "/F1 10 Tf",
+                f"{margin} {current_title_y - 18:.2f} Td",
+                f"({_pdf_escape(subtitle)}) Tj",
+                "ET",
+            ])
+        content_parts.extend([
+            "BT",
+            "/F1 9 Tf",
+            f"{page_width - margin - 70} {current_title_y:.2f} Td",
+            f"(Page {i + 1}/{page_count}) Tj",
+            "ET",
+        ])
+
+        y_top = table_top
+        row_count = len(page_rows)
+        table_height = header_height + (row_count * row_height)
+        y_bottom = y_top - table_height
+
+        content_parts.extend([
+            "0.2 w",
+            f"{margin:.2f} {y_top:.2f} m {margin + table_width:.2f} {y_top:.2f} l S",
+            f"{margin:.2f} {y_top - header_height:.2f} m {margin + table_width:.2f} {y_top - header_height:.2f} l S",
+        ])
+        for row_idx in range(row_count):
+            y_line = y_top - header_height - ((row_idx + 1) * row_height)
+            content_parts.append(f"{margin:.2f} {y_line:.2f} m {margin + table_width:.2f} {y_line:.2f} l S")
+
+        x_cursor = margin
+        content_parts.append(f"{x_cursor:.2f} {y_top:.2f} m {x_cursor:.2f} {y_bottom:.2f} l S")
+        for col_w in col_widths:
+            x_cursor += col_w
+            content_parts.append(f"{x_cursor:.2f} {y_top:.2f} m {x_cursor:.2f} {y_bottom:.2f} l S")
+
+        x_cursor = margin + 4
+        for col_idx, header in enumerate(headers):
+            content_parts.extend([
+                "BT",
+                "/F2 9 Tf",
+                f"{x_cursor:.2f} {y_top - 16:.2f} Td",
+                f"({_pdf_escape(header)}) Tj",
+                "ET",
+            ])
+            x_cursor += col_widths[col_idx]
+
+        for row_idx, row in enumerate(page_rows):
+            y_text = y_top - header_height - (row_idx * row_height) - 14
+            x_cursor = margin + 4
+            for col_idx in range(len(headers)):
+                cell = row[col_idx] if col_idx < len(row) else ''
+                content_parts.extend([
+                    "BT",
+                    "/F1 9 Tf",
+                    f"{x_cursor:.2f} {y_text:.2f} Td",
+                    f"({_pdf_escape(cell)}) Tj",
+                    "ET",
+                ])
+                x_cursor += col_widths[col_idx]
+
         content = "\n".join(content_parts).encode('latin-1', errors='replace')
         xobject_part = f" /XObject << /Im0 {image_obj_id} 0 R >>" if image_obj_id else ""
         objects.append(
             f"{page_obj_id} 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-            f"/Resources << /Font << /F1 {font_obj_id} 0 R >>{xobject_part} >> "
+            f"/Resources << /Font << /F1 {regular_font_obj_id} 0 R /F2 {bold_font_obj_id} 0 R >>{xobject_part} >> "
             f"/Contents {content_obj_id} 0 R >> endobj".encode('ascii')
         )
         objects.append(
@@ -215,7 +303,10 @@ def build_table_pdf(title, headers, rows, subtitle='', logo_path=None):
         )
 
     objects.append(
-        f"{font_obj_id} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Courier >> endobj".encode('ascii')
+        f"{regular_font_obj_id} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj".encode('ascii')
+    )
+    objects.append(
+        f"{bold_font_obj_id} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> endobj".encode('ascii')
     )
     if logo_data and logo_size:
         width, height = logo_size
@@ -448,6 +539,75 @@ def build_dashboard_query(filiere_name=None, classe_name=None, subject_name=None
     return query
 
 
+def _avg(values):
+    return (sum(values) / len(values)) if values else 0
+
+
+def build_response_metric_snapshots(responses):
+    if not responses:
+        return []
+
+    response_ids = [resp.id for resp in responses]
+    scale_answers = ClassQuestionAnswer.query.filter(
+        ClassQuestionAnswer.survey_response_id.in_(response_ids),
+        ClassQuestionAnswer.response_type == 'scale',
+    ).all()
+
+    answer_class_names = {ans.class_name for ans in scale_answers if ans.class_name}
+    question_volet_map = {
+        (q.class_name, q.question_text): q.volet_name
+        for q in ClassQuestion.query.filter(ClassQuestion.class_name.in_(answer_class_names)).all()
+    } if answer_class_names else {}
+
+    scales_by_response = {
+        resp.id: {'all': [], 'enseignement': [], 'enseignant': [], 'organisation': [], 'infrastructures': []}
+        for resp in responses
+    }
+
+    for ans in scale_answers:
+        try:
+            numeric_value = int(ans.answer_value)
+        except (TypeError, ValueError):
+            continue
+        bucket = scales_by_response.get(ans.survey_response_id)
+        if not bucket:
+            continue
+        bucket['all'].append(numeric_value)
+        volet_name = question_volet_map.get((ans.class_name, ans.question_text), 'enseignement')
+        if volet_name not in bucket:
+            volet_name = 'enseignement'
+        bucket[volet_name].append(numeric_value)
+
+    snapshots = []
+    for resp in responses:
+        scales = scales_by_response.get(resp.id, {})
+        global_avg = _avg(scales.get('all', []))
+        enseignement_avg = _avg(scales.get('enseignement', []))
+        enseignant_avg = _avg(scales.get('enseignant', []))
+        organisation_avg = _avg(scales.get('organisation', []))
+        infrastructures_avg = _avg(scales.get('infrastructures', []))
+
+        professor_motivation = resp.professor_motivation if resp.professor_motivation > 0 else round(enseignant_avg or global_avg, 2)
+        tools_methodology = resp.tools_methodology if resp.tools_methodology > 0 else round(enseignement_avg or global_avg, 2)
+        explanations_clarity = resp.explanations_clarity if resp.explanations_clarity > 0 else round(enseignement_avg or global_avg, 2)
+
+        snapshots.append({
+            'involvement': resp.involvement if resp.involvement > 0 else round(enseignement_avg or global_avg, 2),
+            'initial_knowledge': resp.initial_knowledge if resp.initial_knowledge > 0 else round(global_avg, 2),
+            'current_knowledge': resp.current_knowledge if resp.current_knowledge > 0 else round(global_avg, 2),
+            'professor_motivation': professor_motivation,
+            'tools_methodology': tools_methodology,
+            'examples_exercises': resp.examples_exercises if resp.examples_exercises > 0 else round(enseignement_avg or global_avg, 2),
+            'explanations_clarity': explanations_clarity,
+            'schedule_organization': resp.schedule_organization if resp.schedule_organization > 0 else round(organisation_avg or global_avg, 2),
+            'infrastructure_quality': resp.infrastructure_quality if resp.infrastructure_quality > 0 else round(infrastructures_avg or global_avg, 2),
+            'overall_satisfaction': resp.overall_satisfaction if resp.overall_satisfaction > 0 else round(global_avg, 2),
+            'practical_skills_yes': 1 if (resp.practical_skills == 'oui' or global_avg >= 6) else 0,
+            'course_organization_yes': 1 if (resp.course_organization == 'oui' or (organisation_avg or global_avg) >= 6) else 0,
+        })
+    return snapshots
+
+
 def get_standard_classes():
     return Classe.query.filter(Classe.nom.in_(CLASS_LEVELS)).order_by(Classe.nom.asc()).all()
 
@@ -489,42 +649,56 @@ def survey():
         volet = question.volet_name if question.volet_name in VOLETS else 'enseignement'
         questions_by_volet[volet].append(question)
 
+    submitted_answers = {}
     if request.method == 'POST':
+        submitted_answers = request.form.to_dict(flat=True)
         feedback = request.form.get('feedback', '').strip()
         extra_answers = []
-        extra_errors = []
+        missing_count = 0
+        scale_values_by_volet = {volet: [] for volet in VOLETS}
+        all_scale_values = []
 
         for question in class_questions:
             field_name = f'class_question_{question.id}'
             value = request.form.get(field_name, '').strip()
             if question.response_type == 'scale':
                 if value not in {str(i) for i in range(11)}:
-                    extra_errors.append(f'Réponse manquante pour la question: {question.question_text}')
+                    missing_count += 1
                 else:
                     extra_answers.append((question, value))
+                    numeric_value = int(value)
+                    all_scale_values.append(numeric_value)
+                    volet_name = question.volet_name if question.volet_name in VOLETS else 'enseignement'
+                    scale_values_by_volet[volet_name].append(numeric_value)
             else:
                 if not value:
-                    extra_errors.append(f'Veuillez saisir une réponse pour: {question.question_text}')
+                    missing_count += 1
                 else:
                     extra_answers.append((question, value[:500]))
 
-        if not extra_errors:
+        if missing_count == 0:
+            global_avg = round(_avg(all_scale_values), 2)
+            enseignement_avg = round(_avg(scale_values_by_volet['enseignement']) or global_avg, 2)
+            enseignant_avg = round(_avg(scale_values_by_volet['enseignant']) or global_avg, 2)
+            organisation_avg = round(_avg(scale_values_by_volet['organisation']) or global_avg, 2)
+            infrastructures_avg = round(_avg(scale_values_by_volet['infrastructures']) or global_avg, 2)
+
             new_response = SurveyResponse(
                 filiere_name=filiere_name,
                 class_name=class_name,
                 subject_name=subject_name,
-                involvement=0,
-                initial_knowledge=0,
-                current_knowledge=0,
-                professor_motivation=0,
-                tools_methodology=0,
-                examples_exercises=0,
-                explanations_clarity=0,
-                practical_skills='non',
-                course_organization='non',
-                schedule_organization=0,
-                infrastructure_quality=0,
-                overall_satisfaction=0,
+                involvement=int(round(enseignement_avg)),
+                initial_knowledge=int(round(global_avg)),
+                current_knowledge=int(round(global_avg)),
+                professor_motivation=int(round(enseignant_avg)),
+                tools_methodology=int(round(enseignement_avg)),
+                examples_exercises=int(round(enseignement_avg)),
+                explanations_clarity=int(round(enseignement_avg)),
+                practical_skills='oui' if global_avg >= 6 else 'non',
+                course_organization='oui' if organisation_avg >= 6 else 'non',
+                schedule_organization=int(round(organisation_avg)),
+                infrastructure_quality=int(round(infrastructures_avg)),
+                overall_satisfaction=int(round(global_avg)),
                 feedback=feedback,
             )
             db.session.add(new_response)
@@ -546,9 +720,10 @@ def survey():
             session.pop('token_id', None)
             return redirect(url_for('result'))
 
-        for error in extra_errors:
-            flash(error, 'danger')
-        flash('Veuillez corriger les erreurs dans le formulaire.', 'danger')
+        flash(
+            f'Veuillez voter/répondre dans les autres champs avant de soumettre ({missing_count} question(s) manquante(s)).',
+            'danger'
+        )
 
     active_questionnaire = Questionnaire.query.filter_by(is_active=True).order_by(Questionnaire.created_at.desc()).first()
     return render_template(
@@ -558,6 +733,7 @@ def survey():
         volets=VOLETS,
         volet_labels=VOLET_LABELS,
         questions_by_volet=questions_by_volet,
+        submitted_answers=submitted_answers,
     )
 
 
@@ -688,7 +864,10 @@ def generate_tokens():
         flash('Campagne invalide.', 'danger')
         return redirect(url_for('admin'))
 
-    subject = Matiere.query.filter_by(nom=subject_name, class_name=classe_name).filter(
+    subject = Matiere.query.filter(
+        Matiere.nom == subject_name,
+        Matiere.class_name.in_([classe_name, CAMPAIGN_GLOBAL_LABEL]),
+    ).filter(
         Matiere.filiere_name.in_([normalized_filiere, TRONC_COMMUN_LABEL, 'ALL'])
     ).first()
     if not subject:
@@ -780,22 +959,27 @@ def export_tokens_pdf():
     tokens = query.order_by(EvaluationToken.created_at.desc()).all()
     campaigns_by_id = {c.id: c.name for c in EvaluationCampaign.query.all()}
     rows = []
-    for token in tokens:
+    for index, token in enumerate(tokens, start=1):
         rows.append([
+            index,
             token.token,
             campaigns_by_id.get(token.campaign_id, 'Sans campagne'),
             token.filiere_name,
             token.class_name,
             token.subject_name,
             'utilisé' if token.is_used else 'disponible',
+            token.created_at.strftime('%Y-%m-%d %H:%M') if token.created_at else '',
         ])
 
     pdf_bytes = build_table_pdf(
         title="Export des tokens générés",
-        subtitle=f"Filtres: campagne={campaign_id or 'toutes'} | non_utilisés={only_unused}",
-        headers=['Token', 'Campagne', 'Filière', 'Classe', 'Matière', 'Statut'],
+        subtitle=(
+            f"Filtres: campagne={campaign_id or 'toutes'} | non_utilisés={only_unused} | "
+            f"total={len(tokens)} | généré le {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
+        ),
+        headers=['#', 'Token', 'Campagne', 'Filière', 'Classe', 'Matière', 'Statut', 'Créé le'],
         rows=rows,
-        logo_path=PDF_LOGO_PATH,
+        logo_path=get_pdf_logo_path(),
     )
     suffix = f"_campaign_{campaign_id}" if campaign_id else ""
     filename = f"tokens_export{suffix}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
@@ -886,22 +1070,30 @@ def teacher_dashboard():
     classe_name = request.args.get('classe', '').strip() or None
     requested_subject_name = request.args.get('matiere', '').strip() or None
     teacher_subject_name = session.get('teacher_subject_name')
-    subject_name = teacher_subject_name or requested_subject_name
+    is_all_subject_role = (not teacher_subject_name) or teacher_subject_name.strip().upper() == 'ALL'
+
+    if not is_all_subject_role:
+        filiere_name = None
+        classe_name = None
+        subject_name = teacher_subject_name
+    else:
+        subject_name = requested_subject_name
 
     responses = build_dashboard_query(filiere_name, classe_name, subject_name).all()
     total = len(responses)
     comments = [r.feedback for r in responses if r.feedback]
 
+    metric_snapshots = build_response_metric_snapshots(responses)
+    snapshot_total = len(metric_snapshots)
     metrics = {
         'total': total,
-        'satisfaction': round(sum(r.overall_satisfaction for r in responses) / total, 2) if total else 0,
-        'pedagogy': round((
-            sum(r.professor_motivation for r in responses)
-            + sum(r.tools_methodology for r in responses)
-            + sum(r.explanations_clarity for r in responses)
-        ) / (3 * total), 2) if total else 0,
-        'organization': round(sum(r.schedule_organization for r in responses) / total, 2) if total else 0,
-        'infrastructure': round(sum(r.infrastructure_quality for r in responses) / total, 2) if total else 0,
+        'satisfaction': round(_avg([m['overall_satisfaction'] for m in metric_snapshots]), 2) if snapshot_total else 0,
+        'pedagogy': round(_avg([
+            (m['professor_motivation'] + m['tools_methodology'] + m['explanations_clarity']) / 3
+            for m in metric_snapshots
+        ]), 2) if snapshot_total else 0,
+        'organization': round(_avg([m['schedule_organization'] for m in metric_snapshots]), 2) if snapshot_total else 0,
+        'infrastructure': round(_avg([m['infrastructure_quality'] for m in metric_snapshots]), 2) if snapshot_total else 0,
     }
 
     classes = get_standard_classes()
@@ -914,6 +1106,7 @@ def teacher_dashboard():
         classes=classes,
         matieres=matieres,
         teacher_subject_name=teacher_subject_name,
+        is_all_subject_role=is_all_subject_role,
         selected={
             'filiere': filiere_name or '',
             'classe': classe_name or '',
@@ -1017,18 +1210,19 @@ def generate_report():
         flash('Aucune donnée trouvée pour cette filière, classe et matière.', 'warning')
         return redirect(url_for('admin'))
 
-    avg_involvement = sum(resp.involvement for resp in responses) / len(responses)
-    avg_initial_knowledge = sum(resp.initial_knowledge for resp in responses) / len(responses)
-    avg_current_knowledge = sum(resp.current_knowledge for resp in responses) / len(responses)
-    avg_professor_motivation = sum(resp.professor_motivation for resp in responses) / len(responses)
-    avg_tools_methodology = sum(resp.tools_methodology for resp in responses) / len(responses)
-    avg_examples_exercises = sum(resp.examples_exercises for resp in responses) / len(responses)
-    avg_explanations_clarity = sum(resp.explanations_clarity for resp in responses) / len(responses)
-    avg_satisfaction_general = sum(resp.overall_satisfaction for resp in responses) / len(responses)
-    avg_schedule_organization = sum(resp.schedule_organization for resp in responses) / len(responses)
-    avg_infrastructure_quality = sum(resp.infrastructure_quality for resp in responses) / len(responses)
-    practical_skills_yes = sum(1 for resp in responses if resp.practical_skills == 'oui')
-    course_organization_yes = sum(1 for resp in responses if resp.course_organization == 'oui')
+    metric_snapshots = build_response_metric_snapshots(responses)
+    avg_involvement = _avg([m['involvement'] for m in metric_snapshots])
+    avg_initial_knowledge = _avg([m['initial_knowledge'] for m in metric_snapshots])
+    avg_current_knowledge = _avg([m['current_knowledge'] for m in metric_snapshots])
+    avg_professor_motivation = _avg([m['professor_motivation'] for m in metric_snapshots])
+    avg_tools_methodology = _avg([m['tools_methodology'] for m in metric_snapshots])
+    avg_examples_exercises = _avg([m['examples_exercises'] for m in metric_snapshots])
+    avg_explanations_clarity = _avg([m['explanations_clarity'] for m in metric_snapshots])
+    avg_satisfaction_general = _avg([m['overall_satisfaction'] for m in metric_snapshots])
+    avg_schedule_organization = _avg([m['schedule_organization'] for m in metric_snapshots])
+    avg_infrastructure_quality = _avg([m['infrastructure_quality'] for m in metric_snapshots])
+    practical_skills_yes = sum(m['practical_skills_yes'] for m in metric_snapshots)
+    course_organization_yes = sum(m['course_organization_yes'] for m in metric_snapshots)
 
     return render_template(
         'report.html',
@@ -1068,6 +1262,7 @@ def dashboard():
     responses = query.all()
 
     total = len(responses)
+    metric_snapshots = build_response_metric_snapshots(responses)
     if total == 0:
         metrics = {
             'participation': 0,
@@ -1079,14 +1274,13 @@ def dashboard():
     else:
         metrics = {
             'participation': total,
-            'satisfaction': round(sum(r.overall_satisfaction for r in responses) / total, 2),
-            'organization': round(sum(r.schedule_organization for r in responses) / total, 2),
-            'infrastructure': round(sum(r.infrastructure_quality for r in responses) / total, 2),
-            'pedagogy': round((
-                sum(r.professor_motivation for r in responses)
-                + sum(r.tools_methodology for r in responses)
-                + sum(r.explanations_clarity for r in responses)
-            ) / (3 * total), 2),
+            'satisfaction': round(_avg([m['overall_satisfaction'] for m in metric_snapshots]), 2),
+            'organization': round(_avg([m['schedule_organization'] for m in metric_snapshots]), 2),
+            'infrastructure': round(_avg([m['infrastructure_quality'] for m in metric_snapshots]), 2),
+            'pedagogy': round(_avg([
+                (m['professor_motivation'] + m['tools_methodology'] + m['explanations_clarity']) / 3
+                for m in metric_snapshots
+            ]), 2),
         }
 
     classes = get_standard_classes()
@@ -1173,7 +1367,7 @@ def dashboard_export_pdf():
         subtitle=f"Filtres: filière={filiere_name or 'toutes'} | classe={classe_name or 'toutes'} | matière={subject_name or 'toutes'}",
         headers=['Filière', 'Classe', 'Matière', 'Satisf.', 'Organ.', 'Infra.', 'Motiv.', 'Métho.'],
         rows=rows,
-        logo_path=PDF_LOGO_PATH,
+        logo_path=get_pdf_logo_path(),
     )
     filename = f"dashboard_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
     return Response(
@@ -1336,7 +1530,8 @@ def add_teacher():
         flash('Ce nom d\'utilisateur enseignant existe déjà.', 'warning')
         return redirect(url_for('admin'))
 
-    if assigned_subject_name and not Matiere.query.filter_by(nom=assigned_subject_name).first():
+    is_all_subject_role = (not assigned_subject_name) or assigned_subject_name.upper() == 'ALL'
+    if (not is_all_subject_role) and not Matiere.query.filter_by(nom=assigned_subject_name).first():
         flash('La matière associée à l\'enseignant est invalide.', 'danger')
         return redirect(url_for('admin'))
 
@@ -1344,7 +1539,7 @@ def add_teacher():
         username=username,
         password_hash=generate_password_hash(password),
         full_name=full_name or None,
-        assigned_subject_name=assigned_subject_name or None,
+        assigned_subject_name=None if is_all_subject_role else assigned_subject_name,
         is_active=True,
     )
     db.session.add(teacher)
