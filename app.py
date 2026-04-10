@@ -5,6 +5,7 @@ import csv
 import io
 import os
 import re
+import unicodedata
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -100,7 +101,8 @@ def get_pdf_logo_path():
 
 
 def _pdf_escape(text_value):
-    value = str(text_value or '')
+    raw_value = str(text_value or '')
+    value = unicodedata.normalize('NFKD', raw_value).encode('ascii', 'ignore').decode('ascii')
     return value.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
 
 
@@ -131,15 +133,14 @@ def _get_jpeg_size(data):
     return None
 
 
-def _format_row(columns, widths):
-    padded = []
-    for idx, col in enumerate(columns):
-        width = widths[idx]
-        text = str(col or '')
-        if len(text) > width:
-            text = text[:max(0, width - 1)] + '…'
-        padded.append(text.ljust(width))
-    return " | ".join(padded)
+def _compute_table_widths(headers, rows, min_width=8, max_width=34):
+    column_count = max(1, len(headers))
+    widths = [min(max(len(_pdf_escape(header)) + 2, min_width), max_width) for header in headers]
+    for row in rows:
+        for idx in range(column_count):
+            cell = _pdf_escape(row[idx] if idx < len(row) else '')
+            widths[idx] = min(max(widths[idx], len(cell) + 2), max_width)
+    return widths
 
 
 def _compute_table_widths(headers, rows, min_width=8, max_width=24):
@@ -153,25 +154,19 @@ def _compute_table_widths(headers, rows, min_width=8, max_width=24):
 
 
 def build_table_pdf(title, headers, rows, subtitle='', logo_path=None):
-    page_lines = 46
+    page_width = 595
+    page_height = 842
+    margin = 36
+    table_width = page_width - (2 * margin)
+    row_height = 20
+    header_height = 24
+
     widths = _compute_table_widths(headers, rows)
+    total_units = sum(widths) or 1
+    col_widths = [(w / total_units) * table_width for w in widths]
 
-    header_line = _format_row(headers, widths)
-    separator = '-' * len(header_line)
-    body_lines = [_format_row(row, widths) for row in rows]
-
-    pages = []
-    for i in range(0, max(1, len(body_lines)), page_lines):
-        chunk = body_lines[i:i + page_lines]
-        lines = [title]
-        if subtitle:
-            lines.append(subtitle)
-        lines.append('')
-        lines.append(f"Page {len(pages) + 1}")
-        lines.append(header_line)
-        lines.append(separator)
-        lines.extend(chunk if chunk else ['Aucune donnée'])
-        pages.append(lines)
+    logo_space = 0
+    title_y = page_height - margin
 
     logo_data = None
     logo_size = None
@@ -182,6 +177,28 @@ def build_table_pdf(title, headers, rows, subtitle='', logo_path=None):
         if size:
             logo_data = candidate
             logo_size = size
+            logo_space = 70
+            title_y -= logo_space
+
+    def truncate_cell(text, col_width):
+        cleaned = _pdf_escape(text)
+        max_chars = max(3, int((col_width - 8) / 5.5))
+        if len(cleaned) > max_chars:
+            return cleaned[:max(0, max_chars - 3)] + "..."
+        return cleaned
+
+    rendered_rows = [
+        [truncate_cell(cell, col_widths[idx]) for idx, cell in enumerate(row)]
+        for row in rows
+    ] if rows else [["Aucune donnee disponible"] + [''] * (len(headers) - 1)]
+
+    table_top = title_y - 52
+    available_height = table_top - margin
+    rows_per_page = max(8, int((available_height - header_height) / row_height))
+    pages = [
+        rendered_rows[i:i + rows_per_page]
+        for i in range(0, max(1, len(rendered_rows)), rows_per_page)
+    ]
 
     objects = []
     objects.append(b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj")
@@ -191,13 +208,13 @@ def build_table_pdf(title, headers, rows, subtitle='', logo_path=None):
     kids_refs = " ".join(f"{first_page_obj + i * 2} 0 R" for i in range(page_count))
     objects.append(f"2 0 obj << /Type /Pages /Kids [{kids_refs}] /Count {page_count} >> endobj".encode('ascii'))
 
-    font_obj_id = first_page_obj + page_count * 2
-    image_obj_id = font_obj_id + 1 if logo_data else None
+    regular_font_obj_id = first_page_obj + page_count * 2
+    bold_font_obj_id = regular_font_obj_id + 1
+    image_obj_id = bold_font_obj_id + 1 if logo_data else None
 
-    for i, lines in enumerate(pages):
+    for i, page_rows in enumerate(pages):
         page_obj_id = first_page_obj + i * 2
         content_obj_id = page_obj_id + 1
-        start_y = 810
         content_parts = []
         if logo_data and logo_size:
             width, height = logo_size
@@ -212,21 +229,81 @@ def build_table_pdf(title, headers, rows, subtitle='', logo_path=None):
                 "/Im0 Do",
                 "Q",
             ])
-            start_y = 740
 
-        content_parts.extend(["BT", "/F1 10 Tf", f"40 {start_y} Td"])
-        for idx, line in enumerate(lines):
-            if idx == 0:
-                content_parts.append(f"({_pdf_escape(line)}) Tj")
-            else:
-                content_parts.append("0 -15 Td")
-                content_parts.append(f"({_pdf_escape(line)}) Tj")
-        content_parts.append("ET")
+        current_title_y = title_y + 20
+        content_parts.extend([
+            "BT",
+            "/F2 15 Tf",
+            f"{margin} {current_title_y:.2f} Td",
+            f"({_pdf_escape(title)}) Tj",
+            "ET",
+        ])
+        if subtitle:
+            content_parts.extend([
+                "BT",
+                "/F1 10 Tf",
+                f"{margin} {current_title_y - 18:.2f} Td",
+                f"({_pdf_escape(subtitle)}) Tj",
+                "ET",
+            ])
+        content_parts.extend([
+            "BT",
+            "/F1 9 Tf",
+            f"{page_width - margin - 70} {current_title_y:.2f} Td",
+            f"(Page {i + 1}/{page_count}) Tj",
+            "ET",
+        ])
+
+        y_top = table_top
+        row_count = len(page_rows)
+        table_height = header_height + (row_count * row_height)
+        y_bottom = y_top - table_height
+
+        content_parts.extend([
+            "0.2 w",
+            f"{margin:.2f} {y_top:.2f} m {margin + table_width:.2f} {y_top:.2f} l S",
+            f"{margin:.2f} {y_top - header_height:.2f} m {margin + table_width:.2f} {y_top - header_height:.2f} l S",
+        ])
+        for row_idx in range(row_count):
+            y_line = y_top - header_height - ((row_idx + 1) * row_height)
+            content_parts.append(f"{margin:.2f} {y_line:.2f} m {margin + table_width:.2f} {y_line:.2f} l S")
+
+        x_cursor = margin
+        content_parts.append(f"{x_cursor:.2f} {y_top:.2f} m {x_cursor:.2f} {y_bottom:.2f} l S")
+        for col_w in col_widths:
+            x_cursor += col_w
+            content_parts.append(f"{x_cursor:.2f} {y_top:.2f} m {x_cursor:.2f} {y_bottom:.2f} l S")
+
+        x_cursor = margin + 4
+        for col_idx, header in enumerate(headers):
+            content_parts.extend([
+                "BT",
+                "/F2 9 Tf",
+                f"{x_cursor:.2f} {y_top - 16:.2f} Td",
+                f"({_pdf_escape(header)}) Tj",
+                "ET",
+            ])
+            x_cursor += col_widths[col_idx]
+
+        for row_idx, row in enumerate(page_rows):
+            y_text = y_top - header_height - (row_idx * row_height) - 14
+            x_cursor = margin + 4
+            for col_idx in range(len(headers)):
+                cell = row[col_idx] if col_idx < len(row) else ''
+                content_parts.extend([
+                    "BT",
+                    "/F1 9 Tf",
+                    f"{x_cursor:.2f} {y_text:.2f} Td",
+                    f"({_pdf_escape(cell)}) Tj",
+                    "ET",
+                ])
+                x_cursor += col_widths[col_idx]
+
         content = "\n".join(content_parts).encode('latin-1', errors='replace')
         xobject_part = f" /XObject << /Im0 {image_obj_id} 0 R >>" if image_obj_id else ""
         objects.append(
             f"{page_obj_id} 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-            f"/Resources << /Font << /F1 {font_obj_id} 0 R >>{xobject_part} >> "
+            f"/Resources << /Font << /F1 {regular_font_obj_id} 0 R /F2 {bold_font_obj_id} 0 R >>{xobject_part} >> "
             f"/Contents {content_obj_id} 0 R >> endobj".encode('ascii')
         )
         objects.append(
@@ -236,7 +313,10 @@ def build_table_pdf(title, headers, rows, subtitle='', logo_path=None):
         )
 
     objects.append(
-        f"{font_obj_id} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Courier >> endobj".encode('ascii')
+        f"{regular_font_obj_id} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj".encode('ascii')
+    )
+    objects.append(
+        f"{bold_font_obj_id} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> endobj".encode('ascii')
     )
     if logo_data and logo_size:
         width, height = logo_size
