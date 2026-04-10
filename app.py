@@ -143,6 +143,16 @@ def _compute_table_widths(headers, rows, min_width=8, max_width=34):
     return widths
 
 
+def _compute_table_widths(headers, rows, min_width=8, max_width=24):
+    column_count = len(headers)
+    widths = [min(max(len(str(header or '')) + 1, min_width), max_width) for header in headers]
+    for row in rows:
+        for idx in range(column_count):
+            cell = str(row[idx] if idx < len(row) else '')
+            widths[idx] = min(max(widths[idx], len(cell) + 1), max_width)
+    return widths
+
+
 def build_table_pdf(title, headers, rows, subtitle='', logo_path=None):
     page_width = 595
     page_height = 842
