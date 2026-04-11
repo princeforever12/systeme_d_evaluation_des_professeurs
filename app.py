@@ -1336,6 +1336,7 @@ def dashboard_export_pdf():
     responses = build_dashboard_query(filiere_name, classe_name, subject_name).all()
     rows = [
         [
+            idx,
             r.filiere_name,
             r.class_name,
             r.subject_name,
@@ -1345,14 +1346,19 @@ def dashboard_export_pdf():
             r.professor_motivation,
             r.tools_methodology,
         ]
-        for r in responses
+        for idx, r in enumerate(responses, start=1)
     ]
     pdf_bytes = build_table_pdf(
         title="Export dashboard décisionnel",
-        subtitle=f"Filtres: filière={filiere_name or 'toutes'} | classe={classe_name or 'toutes'} | matière={subject_name or 'toutes'}",
-        headers=['Filière', 'Classe', 'Matière', 'Satisf.', 'Organ.', 'Infra.', 'Motiv.', 'Métho.'],
+        subtitle=(
+            f"Filtres: filiere={filiere_name or 'toutes'} | classe={classe_name or 'toutes'} | "
+            f"matiere={subject_name or 'toutes'} | total={len(responses)}"
+        ),
+        headers=['#', 'Filiere', 'Classe', 'Matiere', 'Satisf.', 'Organ.', 'Infra.', 'Motiv.', 'Metho.'],
         rows=rows,
-        logo_path=get_pdf_logo_path(),
+        logo_path=PDF_LOGO_PATH,
+        preferred_widths=[2, 8, 5, 11, 5, 5, 5, 5, 5],
+        no_truncate_cols=[3],
     )
     filename = f"dashboard_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
     return Response(
