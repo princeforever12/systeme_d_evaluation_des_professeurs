@@ -100,6 +100,20 @@ def get_pdf_logo_path():
     return None
 
 
+def get_pdf_logo_path():
+    candidates = [
+        os.getenv('SCHOOL_LOGO_PATH', '').strip(),
+        str(globals().get('PDF_LOGO_PATH', '') or '').strip(),
+        os.path.join('static', 'assets', 'utt_loko_logo.jpg'),
+        os.path.join('static', 'assets', 'ecole_logo.jpg'),
+        os.path.join('static', 'assets', 'logo.jpg'),
+    ]
+    for candidate in candidates:
+        if candidate and os.path.exists(candidate):
+            return candidate
+    return None
+
+
 def _pdf_escape(text_value):
     value = unicodedata.normalize('NFKD', str(text_value or '')).encode('ascii', 'ignore').decode('ascii')
     return value.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
@@ -962,7 +976,7 @@ def export_tokens_pdf():
         ),
         headers=['#', 'Token', 'Campagne', 'Filiere', 'Classe', 'Matiere', 'Statut', 'Cree le'],
         rows=rows,
-        logo_path=PDF_LOGO_PATH,
+        logo_path=get_pdf_logo_path(),
         preferred_widths=[2, 9, 9, 10, 4, 13, 5, 8],
         no_truncate_cols=[1],
     )
@@ -1356,7 +1370,7 @@ def dashboard_export_pdf():
         ),
         headers=['#', 'Filiere', 'Classe', 'Matiere', 'Satisf.', 'Organ.', 'Infra.', 'Motiv.', 'Metho.'],
         rows=rows,
-        logo_path=PDF_LOGO_PATH,
+        logo_path=get_pdf_logo_path(),
         preferred_widths=[2, 8, 5, 11, 5, 5, 5, 5, 5],
         no_truncate_cols=[3],
     )
