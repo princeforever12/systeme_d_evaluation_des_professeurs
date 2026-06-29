@@ -100,6 +100,9 @@ def get_pdf_logo_path():
     return None
 
 
+PDF_LOGO_PATH = get_pdf_logo_path()
+
+
 def _pdf_escape(text_value):
     value = unicodedata.normalize('NFKD', str(text_value or '')).encode('ascii', 'ignore').decode('ascii')
     return value.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
